@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@drawable/neon_bg"
+    android:orientation="vertical"
+    android:padding="20dp">
+
+    <TextView
+        android:text="SENSEI MOD MENU"
+        android:textColor="#00FF00"
+        android:textSize="22sp"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="20dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="10dp"
+        android:background="#111111"
+        android:layout_marginBottom="10dp">
+        
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Background Audio"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"/>
+            
+        <Switch
+            android:id="@+id/switch_audio"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:thumbTint="#00FF00"
+            android:trackTint="#333333"/>
+    </LinearLayout>
+
+    <Button
+        android:id="@+id/btn_mod_external"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Open in External Player"
+        android:backgroundTint="#333333"
+        android:textColor="#00FF00"
+        android:layout_marginBottom="10dp"/>
+
+    <Button
+        android:id="@+id/btn_mod_reload"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Force Reload System"
+        android:backgroundTint="#333333"
+        android:textColor="#FF0000"
+        android:layout_marginBottom="10dp"/>
+
+    <TextView
+        android:id="@+id/btn_close_menu"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="[ CLOSE MENU ]"
+        android:textColor="#555555"
+        android:gravity="center"
+        android:padding="10dp"
+        android:textStyle="bold"/>
+
+</LinearLayout>
