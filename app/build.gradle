@@ -8,31 +8,30 @@ android {
 
     defaultConfig {
         applicationId "com.jubair.youtube"
-        minSdk 19
+        minSdk 21 // Android 5.0 (Better for background play)
         targetSdk 33
-        versionCode 1
-        versionName "1.0"
-        vectorDrawables.useSupportLibrary = true
-        multiDexEnabled true
+        versionCode 2
+        versionName "2.0-Sensei-Pro"
+        
+        // অ্যাপের সাইজ বাড়ানোর টেকনিক (Resource Shrinking বন্ধ রাখা)
+        // তুমি চাইলে 'res/raw' ফোল্ডারে বড় কোনো mp3 বা ফাইল রাখলে সাইজ বেড়ে যাবে।
     }
 
     buildTypes {
         release {
-            minifyEnabled false
+            // সিকিউরিটি: কোড হিজিবিজি করে দিবে (Obfuscation)
+            minifyEnabled true 
+            shrinkResources true
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        debug {
+            // টেস্টিং এর সময় সিকিউরিটি অন রাখলে লগ বুঝতে সমস্যা হয়, তাই ফলস
+            minifyEnabled false
+        }
     }
-    
-    // জাভা কম্প্যাটিবিলিটি ফিক্স
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
-    }
-    
-    // ছোটখাটো এরর বা ওয়ার্নিং এর জন্য যেন বিল্ড না আটকায়
-    lintOptions {
-        abortOnError false
-        checkReleaseBuilds false
     }
 }
 

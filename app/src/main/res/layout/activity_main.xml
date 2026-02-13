@@ -8,40 +8,28 @@
     <WebView
         android:id="@+id/main_webview"
         android:layout_width="match_parent"
-        android:layout_height="match_parent" />
-
-    <RelativeLayout
+        android:layout_height="match_parent" 
+        android:layout_marginBottom="50dp"/> <RelativeLayout
         android:id="@+id/offline_layout"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:background="#000000"
         android:visibility="gone"
         android:gravity="center">
-
-        <ImageView
-            android:id="@+id/img_no_net"
-            android:layout_width="100dp"
-            android:layout_height="100dp"
-            android:src="@drawable/ic_wifi_off"
-            android:tint="#FF0000"/>
-
         <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="SYSTEM DISCONNECTED"
+            android:text="SYSTEM OFFLINE"
             android:textColor="#FF0000"
-            android:textSize="20sp"
+            android:textSize="30sp"
             android:textStyle="bold"
-            android:layout_marginTop="20dp"/>
-
+            android:layout_centerHorizontal="true"/>
         <Button
             android:id="@+id/btn_retry"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="20dp"
             android:text="RECONNECT"
-            android:backgroundTint="#FF0000"
-            android:textColor="#000000"/>
+            android:layout_below="@id/img_no_net"
+            android:layout_centerHorizontal="true"/>
     </RelativeLayout>
 
     <FrameLayout
@@ -51,16 +39,15 @@
         android:visibility="gone"
         android:background="#000000" />
 
-    <ImageView
-        android:id="@+id/btn_mod_menu"
-        android:layout_width="50dp"
+    <Button
+        android:id="@+id/btn_menu_trigger"
+        android:layout_width="match_parent"
         android:layout_height="50dp"
-        android:src="@drawable/ic_launcher" 
-        android:layout_gravity="bottom|end"
-        android:layout_margin="20dp"
-        android:alpha="0.7"
-        android:background="@drawable/neon_bg"
-        android:padding="5dp"
-        android:elevation="10dp"/>
+        android:layout_gravity="bottom"
+        android:background="#111111"
+        android:text="▲ CONTROL CENTER ▲"
+        android:textColor="#00FF00"
+        android:textSize="12sp"
+        android:textStyle="bold"/>
 
 </FrameLayout>
