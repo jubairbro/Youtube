@@ -22,7 +22,6 @@ public class MainActivity extends Activity {
         webView = new WebView(this);
         setContentView(webView);
 
-        // Persistent Toast Every 5 Seconds
         toastRunnable = new Runnable() {
             @Override
             public void run() {
@@ -33,7 +32,6 @@ public class MainActivity extends Activity {
                 );
                 toast.setGravity(Gravity.CENTER, 0, 0);
                 toast.show();
-
                 handler.postDelayed(this, 5000);
             }
         };
@@ -44,28 +42,11 @@ public class MainActivity extends Activity {
         settings.setDomStorageEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
 
-        // Chrome User Agent for compatibility
         settings.setUserAgentString(
-                "Mozilla/5.0 (Linux; Android 4.4.2) AppleWebKit/537.36 " +
-                "(KHTML, like Gecko) Chrome/86.0.4240.198 Mobile Safari/537.36"
+                "Mozilla/5.0 (Linux; Android 4.4.2) AppleWebKit/537.36 Chrome/86.0 Mobile Safari/537.36"
         );
 
         webView.setWebViewClient(new WebViewClient());
         webView.loadUrl("https://m.youtube.com");
-    }
-
-    @Override
-    public void onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack();
-        } else {
-            super.onBackPressed();
-        }
-    }
-
-    @Override
-    protected void onDestroy() {
-        handler.removeCallbacks(toastRunnable);
-        super.onDestroy();
     }
 }

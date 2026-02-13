@@ -1,19 +1,12 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     package="com.example.youtubeweb">
 
-    <uses-sdk
-        android:minSdkVersion="19"
-        android:targetSdkVersion="30"/>
-
     <uses-permission android:name="android.permission.INTERNET"/>
 
     <application
-        android:usesCleartextTraffic="true"
         android:theme="@android:style/Theme.Holo.Light.NoActionBar">
 
-        <activity
-            android:name=".MainActivity"
-            android:configChanges="orientation|screenSize"
+        <activity android:name=".MainActivity"
             android:hardwareAccelerated="true">
 
             <intent-filter>
@@ -22,6 +15,5 @@
             </intent-filter>
 
         </activity>
-
     </application>
 </manifest>
