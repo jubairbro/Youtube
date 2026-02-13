@@ -3,29 +3,39 @@ package com.jubair.youtube.utils;
 public class ScriptInjector {
     public static String getRemoveAdsScript() {
         return "javascript:(function() {" +
+                // 1. CSS Injection (Hide Elements)
                 "var style = document.createElement('style');" +
                 "style.innerHTML = '" +
-                // ইন্টারফেস ক্লিন করা
-                ".mobile-topbar-header, .pivot-bar-renderer { display: none !important; }" +
-                ".ytm-app-upsell, [aria-label=\"Open App\"] { display: none !important; }" +
-                
-                // ভিডিও অ্যাড এবং ব্যানার অ্যাড রিমুভ
-                ".ad-container, .ad-interrupting, .video-ads { display: none !important; }" +
-                ".ytm-promoted-sparkles-web-renderer { display: none !important; }" +
-                ".ytm-statement-banner-renderer { display: none !important; }" +
-                
-                // হোম পেজের ফালতু শর্টস রিমুভ (অপশনাল)
-                // "ytm-reel-shelf-renderer { display: none !important; }" +
+                ".mobile-topbar-header, .pivot-bar-renderer, .ytm-app-upsell { display: none !important; }" +
+                ".ad-container, .ad-interrupting, .video-ads, .ytp-ad-overlay-container { display: none !important; }" +
+                ".ytm-promoted-sparkles-web-renderer, ytm-statement-banner-renderer { display: none !important; }" +
                 "';" +
                 "document.head.appendChild(style);" +
-                
-                // ভিডিওর মাঝখানের অ্যাড স্কিপ করার চেষ্টা
+
+                // 2. JS Bypass (Force Skip & Popup Remove)
                 "setInterval(function(){" +
-                "   var skipBtn = document.querySelector('.ytp-ad-skip-button');" +
-                "   if(skipBtn) skipBtn.click();" +
-                "   var adOverlay = document.querySelector('.ytp-ad-overlay-close-button');" +
-                "   if(adOverlay) adOverlay.click();" +
-                "}, 1000);" +
+                "   try {" +
+                "       var skipBtn = document.querySelector('.ytp-ad-skip-button');" +
+                "       if(skipBtn) skipBtn.click();" +
+                "       var overlayClose = document.querySelector('.ytp-ad-overlay-close-button');" +
+                "       if(overlayClose) overlayClose.click();" +
+                "       " +
+                "       // Remove 'Adblock Detected' Popup" +
+                "       var popup = document.querySelector('yt-playability-error-supported-renderers');" +
+                "       if(popup) { popup.remove(); }" +
+                "       var backdrop = document.querySelector('tp-yt-iron-overlay-backdrop');" +
+                "       if(backdrop) { backdrop.remove(); }" +
+                "       " +
+                "       // Force Play if paused by adblock detection" +
+                "       var video = document.querySelector('video');" +
+                "       if(video && video.paused && video.currentTime > 0 && !video.ended) { video.play(); }" +
+                "   } catch(e) {}" +
+                "}, 500);" +
+                
+                // 3. Prevent Ad Scripts (Experimental)
+                "if(window.yt && window.yt.config_) {" +
+                "   window.yt.config_.openPopupConfig = { supportedPopups: { adBlockMessageViewModel: false } };" +
+                "}" +
                 "})()";
     }
 }
