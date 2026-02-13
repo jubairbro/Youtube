@@ -66,7 +66,7 @@
         android:clickable="true"
         android:focusable="true"
         android:background="?attr/selectableItemBackground">
-        <TextView android:text="❌  Exit App" android:textColor="#FF0000" android:textSize="16sp"/>
+        <TextView android:text="✘ Exit App" android:textColor="#FF0000" android:textSize="16sp"/>
     </LinearLayout>
 
 </LinearLayout>
