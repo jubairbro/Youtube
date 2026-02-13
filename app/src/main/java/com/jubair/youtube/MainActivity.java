@@ -1,24 +1,19 @@
 package com.jubair.youtube;
 
 import android.annotation.SuppressLint;
-import android.app.Dialog;
 import android.app.PictureInPictureParams;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
 import android.graphics.Color;
-import android.graphics.drawable.ColorDrawable;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Rational;
-import android.view.Gravity;
 import android.view.View;
-import android.view.ViewGroup;
-import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
@@ -29,16 +24,15 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.LinearLayout;
+import android.widget.ImageView;
 import android.widget.RelativeLayout;
-import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.jubair.youtube.utils.ScriptInjector;
 import com.jubair.youtube.ui.DialogManager;
-import com.jubair.youtube.utils.CrashHandler; // Import Crash Handler
+import com.jubair.youtube.utils.CrashHandler;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -50,91 +44,33 @@ public class MainActivity extends AppCompatActivity {
     private RelativeLayout mOfflineLayout;
     private View mCustomView;
     private WebChromeClient.CustomViewCallback mCustomViewCallback;
-    private Button btnMenuTrigger; 
-    private boolean isAudioMode = true;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        
-        // 1. Activate Crash Handler (সবার আগে এটা রান হবে)
-        Thread.setDefaultUncaughtExceptionHandler(new CrashHandler(this));
-
+        Thread.setDefaultUncaughtExceptionHandler(new CrashHandler(this)); // Crash Protection
         setContentView(R.layout.activity_main);
 
         myWebView = findViewById(R.id.main_webview);
         mFullscreenContainer = findViewById(R.id.fullscreen_container);
         mOfflineLayout = findViewById(R.id.offline_layout);
-        btnMenuTrigger = findViewById(R.id.btn_menu_trigger);
         Button btnRetry = findViewById(R.id.btn_retry);
 
         initWebView();
         DialogManager.showCyberpunkDialog(this);
         showSenseiToast();
 
-        // মেনু বাটন ফিক্সড লজিক
-        btnMenuTrigger.setOnClickListener(v -> showControlCenter());
-
         btnRetry.setOnClickListener(v -> checkNetworkAndLoad());
         checkNetworkAndLoad();
     }
 
-    // --- NEW: CONTROL CENTER (Safe Version) ---
-    private void showControlCenter() {
-        try {
-            // সাধারণ ডায়লগ ব্যবহার করছি যা ক্র্যাশ করবে না
-            final Dialog dialog = new Dialog(this);
-            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-            dialog.setContentView(R.layout.layout_control_center);
-
-            // ডায়লগটি স্ক্রিনের নিচে সেট করা (Bottom Sheet এর মত)
-            Window window = dialog.getWindow();
-            if (window != null) {
-                window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-                window.setGravity(Gravity.BOTTOM); // নিচ থেকে আসবে
-                window.getAttributes().windowAnimations = android.R.style.Animation_InputMethod; // স্লাইড এনিমেশন
-            }
-
-            Switch switchAudio = dialog.findViewById(R.id.switch_audio);
-            LinearLayout btnPip = dialog.findViewById(R.id.btn_pip);
-            LinearLayout btnReload = dialog.findViewById(R.id.btn_reload);
-            LinearLayout btnExit = dialog.findViewById(R.id.btn_exit);
-
-            if(switchAudio != null) {
-                switchAudio.setChecked(isAudioMode);
-                switchAudio.setOnCheckedChangeListener((buttonView, isChecked) -> {
-                    isAudioMode = isChecked;
-                    Toast.makeText(this, isAudioMode ? "Background Play: ON" : "Background Play: OFF", Toast.LENGTH_SHORT).show();
-                });
-            }
-
-            if(btnPip != null) {
-                btnPip.setOnClickListener(v -> {
-                    enterPiPMode();
-                    dialog.dismiss();
-                });
-            }
-
-            if(btnReload != null) {
-                btnReload.setOnClickListener(v -> {
-                    myWebView.reload();
-                    dialog.dismiss();
-                });
-            }
-            
-            if(btnExit != null) {
-                btnExit.setOnClickListener(v -> finishAffinity());
-            }
-
-            dialog.show();
-        } catch (Exception e) {
-            Toast.makeText(this, "Menu Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private void enterPiPMode() {
+    // --- 🔥 AUTO PiP & BACKGROUND MAGIC 🔥 ---
+    
+    // ১. অ্যাপ মিনিমাইজ করলেই PiP চালু হবে
+    @Override
+    protected void onUserLeaveHint() {
+        super.onUserLeaveHint();
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             try {
                 Rational aspectRatio = new Rational(16, 9);
@@ -142,47 +78,36 @@ public class MainActivity extends AppCompatActivity {
                 params.setAspectRatio(aspectRatio);
                 enterPictureInPictureMode(params.build());
             } catch (Exception e) {
-                Toast.makeText(this, "PiP Failed", Toast.LENGTH_SHORT).show();
+                // PiP সাপোর্ট না করলে কিছু হবে না, ব্যাকগ্রাউন্ড অডিও চলবে
             }
-        } else {
-            Toast.makeText(this, "PiP not supported", Toast.LENGTH_SHORT).show();
         }
+    }
+
+    // ২. ব্যাকগ্রাউন্ডে অডিও চালু রাখা (সবচেয়ে গুরুত্বপূর্ণ)
+    @Override
+    protected void onPause() {
+        // সুপার ক্লাস কল করছি যাতে অ্যাপ ক্র্যাশ না করে, কিন্তু...
+        super.onPause();
+        
+        // ... আমরা WebView কে Pause করব না! 
+        // myWebView.onPause(); <- এটা বন্ধ রাখলাম
+        
+        // এতে স্ক্রিন অফ করলেও বা PiP মোডেও গান বাজবে।
     }
 
     @Override
-    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
-        if (isInPictureInPictureMode) {
-            btnMenuTrigger.setVisibility(View.GONE);
-        } else {
-            btnMenuTrigger.setVisibility(View.VISIBLE);
-        }
+    protected void onResume() {
+        myWebView.onResume();
+        super.onResume();
     }
 
-    private void checkNetworkAndLoad() {
-        if (isNetworkAvailable()) {
-            mOfflineLayout.setVisibility(View.GONE);
-            myWebView.setVisibility(View.VISIBLE);
-            if (myWebView.getUrl() == null) myWebView.loadUrl("https://m.youtube.com");
-            else myWebView.reload();
-        } else {
-            myWebView.setVisibility(View.GONE);
-            mOfflineLayout.setVisibility(View.VISIBLE);
-        }
-    }
-
-    private boolean isNetworkAvailable() {
-        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-        NetworkInfo ni = cm.getActiveNetworkInfo();
-        return ni != null && ni.isConnected();
-    }
-
+    // --- Standard Webview Setup ---
     private void initWebView() {
         WebSettings webSettings = myWebView.getSettings();
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
         webSettings.setDatabaseEnabled(true);
-        webSettings.setMediaPlaybackRequiresUserGesture(false);
+        webSettings.setMediaPlaybackRequiresUserGesture(false); 
         webSettings.setRenderPriority(WebSettings.RenderPriority.HIGH);
         webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
         webSettings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36");
@@ -222,7 +147,6 @@ public class MainActivity extends AppCompatActivity {
                 mFullscreenContainer.setVisibility(View.VISIBLE);
                 mFullscreenContainer.addView(view);
                 mCustomViewCallback = callback;
-                btnMenuTrigger.setVisibility(View.GONE);
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
             }
@@ -235,27 +159,28 @@ public class MainActivity extends AppCompatActivity {
                 mFullscreenContainer.removeView(mCustomView);
                 mCustomView = null;
                 mCustomViewCallback.onCustomViewHidden();
-                btnMenuTrigger.setVisibility(View.VISIBLE);
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
             }
         });
     }
 
-    @Override
-    protected void onPause() {
-        if (isAudioMode) {
-            super.onPause();
+    private void checkNetworkAndLoad() {
+        if (isNetworkAvailable()) {
+            mOfflineLayout.setVisibility(View.GONE);
+            myWebView.setVisibility(View.VISIBLE);
+            if (myWebView.getUrl() == null) myWebView.loadUrl("https://m.youtube.com");
+            else myWebView.reload();
         } else {
-            myWebView.onPause();
-            super.onPause();
+            myWebView.setVisibility(View.GONE);
+            mOfflineLayout.setVisibility(View.VISIBLE);
         }
     }
 
-    @Override
-    protected void onResume() {
-        myWebView.onResume();
-        super.onResume();
+    private boolean isNetworkAvailable() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo ni = cm.getActiveNetworkInfo();
+        return ni != null && ni.isConnected();
     }
 
     private void showSenseiToast() {
@@ -283,7 +208,7 @@ public class MainActivity extends AppCompatActivity {
         if (myWebView.canGoBack()) {
             myWebView.goBack();
         } else {
-            super.onBackPressed();
+            super.onBackPressed(); // Exit
         }
     }
 }
