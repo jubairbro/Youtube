@@ -10,14 +10,14 @@ android {
         applicationId "com.jubair.youtube"
         minSdk 21
         targetSdk 33
-        versionCode 3  // আপডেট দিলে এটা বাড়াবেন (3, 4, 5...)
-        versionName "3.0-Stable"
+        versionCode 4
+        versionName "3.1-Stable"
     }
 
-    // সাইনিং কনফিগারেশন (ডাটা সেভ রাখার জন্য)
     signingConfigs {
         release {
-            storeFile file("../../my-release-key.jks") // পাথ ঠিক রাখতে হবে
+            // ফিক্স: rootProject.file ব্যবহার করলে সঠিক জায়গায় খুঁজবে
+            storeFile rootProject.file("my-release-key.jks") 
             storePassword "123456"
             keyAlias "my-key-alias"
             keyPassword "123456"
@@ -27,11 +27,11 @@ android {
     buildTypes {
         release {
             minifyEnabled false
-            signingConfig signingConfigs.release // সাইনিং অন করা হলো
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
-            signingConfig signingConfigs.release // ডিবাগ মোডেও একই কি
+            signingConfig signingConfigs.release
         }
     }
     
@@ -39,6 +39,7 @@ android {
         checkReleaseBuilds false
         abortOnError false
     }
+    
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
