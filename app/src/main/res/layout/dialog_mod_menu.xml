@@ -9,10 +9,28 @@
     <TextView
         android:text="SENSEI MOD MENU"
         android:textColor="#00FF00"
-        android:textSize="22sp"
+        android:textSize="20sp"
         android:textStyle="bold"
         android:gravity="center"
-        android:layout_marginBottom="20dp"/>
+        android:layout_marginBottom="15dp"/>
+
+    <Button
+        android:id="@+id/btn_pip"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Picture-in-Picture (PiP)"
+        android:backgroundTint="#333333"
+        android:textColor="#00FFFF"
+        android:layout_marginBottom="10dp"/>
+
+    <Button
+        android:id="@+id/btn_mod_external"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Open in External Player"
+        android:backgroundTint="#333333"
+        android:textColor="#00FF00"
+        android:layout_marginBottom="10dp"/>
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -29,7 +47,7 @@
             android:layout_weight="1"
             android:text="Background Audio"
             android:textColor="#FFFFFF"
-            android:textSize="16sp"/>
+            android:textSize="14sp"/>
             
         <Switch
             android:id="@+id/switch_audio"
@@ -38,15 +56,6 @@
             android:thumbTint="#00FF00"
             android:trackTint="#333333"/>
     </LinearLayout>
-
-    <Button
-        android:id="@+id/btn_mod_external"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Open in External Player"
-        android:backgroundTint="#333333"
-        android:textColor="#00FF00"
-        android:layout_marginBottom="10dp"/>
 
     <Button
         android:id="@+id/btn_mod_reload"

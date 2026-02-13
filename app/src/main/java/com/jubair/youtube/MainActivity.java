@@ -2,15 +2,20 @@ package com.jubair.youtube;
 
 import android.annotation.SuppressLint;
 import android.app.Dialog;
+import android.app.PictureInPictureParams;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.util.Rational;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.Window;
@@ -21,7 +26,6 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
-import android.widget.CompoundButton;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
@@ -40,18 +44,22 @@ public class MainActivity extends AppCompatActivity {
     private RelativeLayout mOfflineLayout;
     private View mCustomView;
     private WebChromeClient.CustomViewCallback mCustomViewCallback;
-    private ImageView btnModMenu; // Floating Button
+    private ImageView btnModMenu;
     
     private boolean isAudioMode = false;
     private long pressedTime;
 
-    @SuppressLint("SetJavaScriptEnabled")
+    // Draggable Variables
+    private float dX, dY;
+    private float startX, startY;
+    private static final int CLICK_ACTION_THRESHOLD = 10;
+
+    @SuppressLint({"SetJavaScriptEnabled", "ClickableViewAccessibility"})
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // Bind Views
         myWebView = findViewById(R.id.main_webview);
         mFullscreenContainer = findViewById(R.id.fullscreen_container);
         mOfflineLayout = findViewById(R.id.offline_layout);
@@ -62,11 +70,38 @@ public class MainActivity extends AppCompatActivity {
         DialogManager.showCyberpunkDialog(this);
         showSenseiToast();
 
-        // --- Mod Menu Logic ---
-        btnModMenu.setOnClickListener(new View.OnClickListener() {
+        // --- DRAGGABLE MOD MENU LOGIC ---
+        btnModMenu.setOnTouchListener(new View.OnTouchListener() {
             @Override
-            public void onClick(View v) {
-                showModMenuDialog();
+            public boolean onTouch(View view, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                        dX = view.getX() - event.getRawX();
+                        dY = view.getY() - event.getRawY();
+                        startX = event.getRawX();
+                        startY = event.getRawY();
+                        return true;
+
+                    case MotionEvent.ACTION_MOVE:
+                        view.animate()
+                            .x(event.getRawX() + dX)
+                            .y(event.getRawY() + dY)
+                            .setDuration(0)
+                            .start();
+                        return true;
+
+                    case MotionEvent.ACTION_UP:
+                        float endX = event.getRawX();
+                        float endY = event.getRawY();
+                        if (Math.abs(startX - endX) < CLICK_ACTION_THRESHOLD && 
+                            Math.abs(startY - endY) < CLICK_ACTION_THRESHOLD) {
+                            // যদি বেশি না নড়ে, তাহলে এটা ক্লিক
+                            showModMenuDialog();
+                        }
+                        return true;
+                    default:
+                        return false;
+                }
             }
         });
 
@@ -74,57 +109,81 @@ public class MainActivity extends AppCompatActivity {
         checkNetworkAndLoad();
     }
 
-    // --- NEW MOD MENU DIALOG ---
     private void showModMenuDialog() {
-        final Dialog dialog = new Dialog(this);
-        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
-        dialog.setContentView(R.layout.dialog_mod_menu);
-        
-        if (dialog.getWindow() != null) {
-            dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        }
-
-        Switch switchAudio = dialog.findViewById(R.id.switch_audio);
-        Button btnExt = dialog.findViewById(R.id.btn_mod_external);
-        Button btnReload = dialog.findViewById(R.id.btn_mod_reload);
-        TextView btnClose = dialog.findViewById(R.id.btn_close_menu);
-
-        // Audio State Check
-        switchAudio.setChecked(isAudioMode);
-        switchAudio.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            isAudioMode = isChecked;
-            if(isChecked) {
-                Toast.makeText(MainActivity.this, "Background Audio: ENABLED", Toast.LENGTH_SHORT).show();
-            } else {
-                Toast.makeText(MainActivity.this, "Background Audio: DISABLED", Toast.LENGTH_SHORT).show();
+        try {
+            final Dialog dialog = new Dialog(MainActivity.this); // Context fix
+            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+            dialog.setContentView(R.layout.dialog_mod_menu);
+            
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                dialog.getWindow().setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             }
-        });
 
-        // External Player
-        btnExt.setOnClickListener(v -> {
-            String currentUrl = myWebView.getUrl();
-            if(currentUrl != null) {
-                try {
-                    Intent intent = new Intent(Intent.ACTION_VIEW);
-                    intent.setDataAndType(Uri.parse(currentUrl), "video/*");
-                    startActivity(Intent.createChooser(intent, "Open with..."));
-                } catch (Exception e) {
-                    Toast.makeText(MainActivity.this, "No Player Found", Toast.LENGTH_SHORT).show();
+            Button btnPip = dialog.findViewById(R.id.btn_pip);
+            Switch switchAudio = dialog.findViewById(R.id.switch_audio);
+            Button btnExt = dialog.findViewById(R.id.btn_mod_external);
+            Button btnReload = dialog.findViewById(R.id.btn_mod_reload);
+            TextView btnClose = dialog.findViewById(R.id.btn_close_menu);
+
+            // PiP Logic
+            btnPip.setOnClickListener(v -> {
+                enterPiPMode();
+                dialog.dismiss();
+            });
+
+            switchAudio.setChecked(isAudioMode);
+            switchAudio.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                isAudioMode = isChecked;
+                Toast.makeText(MainActivity.this, isChecked ? "Audio Mode: ON" : "Audio Mode: OFF", Toast.LENGTH_SHORT).show();
+            });
+
+            btnExt.setOnClickListener(v -> {
+                String currentUrl = myWebView.getUrl();
+                if(currentUrl != null) {
+                    try {
+                        Intent intent = new Intent(Intent.ACTION_VIEW);
+                        intent.setDataAndType(Uri.parse(currentUrl), "video/*");
+                        startActivity(Intent.createChooser(intent, "Open with..."));
+                    } catch (Exception e) {
+                        Toast.makeText(MainActivity.this, "No External Player", Toast.LENGTH_SHORT).show();
+                    }
                 }
-            }
-            dialog.dismiss();
-        });
+                dialog.dismiss();
+            });
 
-        // Reload
-        btnReload.setOnClickListener(v -> {
-            myWebView.reload();
-            dialog.dismiss();
-        });
+            btnReload.setOnClickListener(v -> {
+                myWebView.reload();
+                dialog.dismiss();
+            });
 
-        btnClose.setOnClickListener(v -> dialog.dismiss());
+            btnClose.setOnClickListener(v -> dialog.dismiss());
+            dialog.show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Error opening menu", Toast.LENGTH_SHORT).show();
+        }
+    }
 
-        dialog.show();
+    private void enterPiPMode() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Rational aspectRatio = new Rational(16, 9);
+            PictureInPictureParams.Builder params = new PictureInPictureParams.Builder();
+            params.setAspectRatio(aspectRatio);
+            enterPictureInPictureMode(params.build());
+        } else {
+            Toast.makeText(this, "PiP not supported on this Android version", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    // PiP মোডে UI হাইড করা
+    @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        if (isInPictureInPictureMode) {
+            btnModMenu.setVisibility(View.GONE);
+        } else {
+            btnModMenu.setVisibility(View.VISIBLE);
+        }
     }
 
     private void checkNetworkAndLoad() {
@@ -189,7 +248,6 @@ public class MainActivity extends AppCompatActivity {
                 mFullscreenContainer.addView(view);
                 mCustomViewCallback = callback;
                 
-                // Hide Mod Button in Fullscreen
                 btnModMenu.setVisibility(View.GONE);
                 
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -205,7 +263,6 @@ public class MainActivity extends AppCompatActivity {
                 mCustomView = null;
                 mCustomViewCallback.onCustomViewHidden();
                 
-                // Show Mod Button again
                 btnModMenu.setVisibility(View.VISIBLE);
 
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -216,7 +273,7 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onPause() {
-        if (isAudioMode) {
+        if (isAudioMode || (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && isInPictureInPictureMode())) {
             super.onPause(); 
         } else {
             myWebView.onPause();
