@@ -13,6 +13,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
@@ -37,7 +38,6 @@ public class MainActivity extends AppCompatActivity {
     private View mCustomView;
     private WebChromeClient.CustomViewCallback mCustomViewCallback;
     
-    // ফিচার ফ্ল্যাগ
     private boolean isAudioMode = false;
     private long pressedTime;
 
@@ -47,7 +47,6 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        // ভিউ বাইন্ডিং
         myWebView = findViewById(R.id.main_webview);
         mFullscreenContainer = findViewById(R.id.fullscreen_container);
         mOfflineLayout = findViewById(R.id.offline_layout);
@@ -61,16 +60,11 @@ public class MainActivity extends AppCompatActivity {
 
         initWebView();
         
-        // ডায়লগ সাইজ ফিক্স (Full Width)
         DialogManager.showCyberpunkDialog(this);
         showSenseiToast();
 
-        // --- বাটন লজিক ---
-        
-        // ১. মেনু ওপেনার
         btnMenu.setOnClickListener(v -> mDrawerLayout.openDrawer(Gravity.LEFT));
 
-        // ২. অডিও মোড (Background Play)
         btnAudio.setOnClickListener(v -> {
             isAudioMode = !isAudioMode;
             if(isAudioMode) {
@@ -84,7 +78,6 @@ public class MainActivity extends AppCompatActivity {
             mDrawerLayout.closeDrawers();
         });
 
-        // ৩. এক্সটারনাল প্লেয়ার (Default Player)
         btnExternal.setOnClickListener(v -> {
             String currentUrl = myWebView.getUrl();
             if(currentUrl != null) {
@@ -99,16 +92,13 @@ public class MainActivity extends AppCompatActivity {
             mDrawerLayout.closeDrawers();
         });
 
-        // ৪. রিলোড
         btnReload.setOnClickListener(v -> {
             myWebView.reload();
             mDrawerLayout.closeDrawers();
         });
         
-        // ৫. রিট্রাই (অফলাইন)
         btnRetry.setOnClickListener(v -> checkNetworkAndLoad());
         
-        // প্রথমে চেক করো নেট আছে কিনা
         checkNetworkAndLoad();
     }
 
@@ -138,7 +128,7 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
         webSettings.setDatabaseEnabled(true);
-        webSettings.setMediaPlaybackRequiresUserGesture(false); // অটোপ্লে এবং অডিও এর জন্য জরুরি
+        webSettings.setMediaPlaybackRequiresUserGesture(false);
         
         webSettings.setRenderPriority(WebSettings.RenderPriority.HIGH);
         webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
@@ -153,13 +143,18 @@ public class MainActivity extends AppCompatActivity {
             
             @Override
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                // নেট চলে গেলে অটোমেটিক অফলাইন পেজ
                 myWebView.setVisibility(View.GONE);
                 mOfflineLayout.setVisibility(View.VISIBLE);
             }
         });
 
         myWebView.setWebChromeClient(new WebChromeClient() {
+            // ভয়েস সার্চ এর জন্য পারমিশন হ্যান্ডলার
+            @Override
+            public void onPermissionRequest(final PermissionRequest request) {
+                request.grant(request.getResources());
+            }
+
             @Override
             public void onShowCustomView(View view, CustomViewCallback callback) {
                 if (mCustomView != null) {
@@ -189,12 +184,9 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
-    // --- Background Audio Logic ---
-    // যখন Audio Mode অন থাকবে, তখন আমরা সুপার ক্লাসের onPause কল করব না
     @Override
     protected void onPause() {
         if (isAudioMode) {
-            // Do NOT call myWebView.onPause()
             super.onPause(); 
         } else {
             myWebView.onPause();
@@ -209,7 +201,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showSenseiToast() {
-        // (আগের টোস্ট কোড অপরিবর্তিত)
         try {
             TextView text = new TextView(this);
             text.setText("System: Jubair Sensei");
@@ -229,18 +220,15 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     public void onBackPressed() {
-        // ড্রয়ার খোলা থাকলে বন্ধ করো
         if (mDrawerLayout.isDrawerOpen(Gravity.LEFT)) {
             mDrawerLayout.closeDrawer(Gravity.LEFT);
             return;
         }
-        // ফুলস্ক্রিন থাকলে ছোট করো
         if (mCustomView != null) {
             WebChromeClient wcc = myWebView.getWebChromeClient();
             if (wcc != null) wcc.onHideCustomView();
             return;
         }
-        // ব্রাউজার ব্যাক
         if (myWebView.canGoBack()) {
             myWebView.goBack();
         } else {

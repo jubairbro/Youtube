@@ -18,6 +18,7 @@ public class DialogManager {
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
         dialog.setContentView(R.layout.dialog_cyberpunk);
         
+        // ব্যাকগ্রাউন্ড ট্রান্সপারেন্ট
         if (dialog.getWindow() != null) {
             dialog.getWindow().setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
         }
@@ -44,6 +45,7 @@ public class DialogManager {
         dialog.setCancelable(false);
         dialog.show();
 
+        // ডায়লগ চওড়া করার ফিক্সড কোড
         Window window = dialog.getWindow();
         if (window != null) {
             window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
