@@ -3,39 +3,31 @@ package com.jubair.youtube.utils;
 public class ScriptInjector {
     public static String getRemoveAdsScript() {
         return "javascript:(function() {" +
-                // 1. CSS Injection (Hide Elements)
                 "var style = document.createElement('style');" +
                 "style.innerHTML = '" +
+                // --- CSS From GoodTube Source ---
+                ".ytd-search ytd-shelf-renderer, ytd-reel-shelf-renderer, ytd-merch-shelf-renderer, ytd-action-companion-ad-renderer, ytd-display-ad-renderer { display: none !important; }" +
+                "ytd-video-masthead-ad-advertiser-info-renderer, ytd-video-masthead-ad-primary-video-renderer, ytd-in-feed-ad-layout-renderer, ytd-ad-slot-renderer, ytd-statement-banner-renderer { display: none !important; }" +
+                ".video-ads, .ytp-ad-overlay-container, .ytp-ad-message-container, .ytp-ad-skip-button-slot { display: none !important; }" +
+                "ytm-promoted-sparkles-web-renderer, ytm-brand-banner-renderer, ytm-item-section-renderer[data-is-ad] { display: none !important; }" +
                 ".mobile-topbar-header, .pivot-bar-renderer, .ytm-app-upsell { display: none !important; }" +
-                ".ad-container, .ad-interrupting, .video-ads, .ytp-ad-overlay-container { display: none !important; }" +
-                ".ytm-promoted-sparkles-web-renderer, ytm-statement-banner-renderer { display: none !important; }" +
+                
+                // Shorts Hiding
+                "ytm-pivot-bar-item-renderer:has(> .pivot-shorts), ytd-rich-section-renderer, ytm-reel-shelf-renderer { display: none !important; }" +
                 "';" +
                 "document.head.appendChild(style);" +
 
-                // 2. JS Bypass (Force Skip & Popup Remove)
+                // --- Auto Skip Logic ---
                 "setInterval(function(){" +
                 "   try {" +
                 "       var skipBtn = document.querySelector('.ytp-ad-skip-button');" +
                 "       if(skipBtn) skipBtn.click();" +
                 "       var overlayClose = document.querySelector('.ytp-ad-overlay-close-button');" +
                 "       if(overlayClose) overlayClose.click();" +
-                "       " +
-                "       // Remove 'Adblock Detected' Popup" +
-                "       var popup = document.querySelector('yt-playability-error-supported-renderers');" +
-                "       if(popup) { popup.remove(); }" +
-                "       var backdrop = document.querySelector('tp-yt-iron-overlay-backdrop');" +
-                "       if(backdrop) { backdrop.remove(); }" +
-                "       " +
-                "       // Force Play if paused by adblock detection" +
                 "       var video = document.querySelector('video');" +
-                "       if(video && video.paused && video.currentTime > 0 && !video.ended) { video.play(); }" +
+                "       if(video && video.paused && video.currentTime > 0) video.play();" +
                 "   } catch(e) {}" +
                 "}, 500);" +
-                
-                // 3. Prevent Ad Scripts (Experimental)
-                "if(window.yt && window.yt.config_) {" +
-                "   window.yt.config_.openPopupConfig = { supportedPopups: { adBlockMessageViewModel: false } };" +
-                "}" +
                 "})()";
     }
 }
