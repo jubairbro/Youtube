@@ -1,4 +1,4 @@
-name: Build APK
+name: Android Build
 
 on:
   push:
@@ -13,31 +13,12 @@ jobs:
 
       - uses: actions/setup-java@v4
         with:
-          distribution: 'zulu'
+          distribution: 'temurin'
           java-version: '17'
 
-      - uses: android-actions/setup-android@v3
+      - uses: gradle/actions/setup-gradle@v3
 
-      - name: Accept Licenses
-        run: yes | sdkmanager --licenses
-
-      - name: Install SDK
-        run: |
-          sdkmanager "platform-tools"
-          sdkmanager "platforms;android-30"
-          sdkmanager "build-tools;30.0.3"
-
-      - name: Setup Gradle 7
-        run: |
-          wget https://services.gradle.org/distributions/gradle-7.0.2-bin.zip
-          unzip gradle-7.0.2-bin.zip
-          export PATH=$PWD/gradle-7.0.2/bin:$PATH
-          gradle wrapper --gradle-version 7.0.2
-
-      - name: Make gradlew executable
-        run: chmod +x gradlew
-
-      - name: Build APK
+      - name: Build Debug APK
         run: ./gradlew assembleDebug
 
       - uses: actions/upload-artifact@v4
