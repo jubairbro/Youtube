@@ -7,7 +7,6 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
-import android.graphics.Bitmap;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.net.ConnectivityManager;
@@ -30,7 +29,6 @@ import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import android.widget.Button;
 import android.widget.FrameLayout;
-import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.Switch;
@@ -38,9 +36,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.google.android.material.bottomsheet.BottomSheetDialog;
 import com.jubair.youtube.utils.ScriptInjector;
 import com.jubair.youtube.ui.DialogManager;
+import com.jubair.youtube.utils.CrashHandler; // Import Crash Handler
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
@@ -52,17 +50,17 @@ public class MainActivity extends AppCompatActivity {
     private RelativeLayout mOfflineLayout;
     private View mCustomView;
     private WebChromeClient.CustomViewCallback mCustomViewCallback;
-    
-    // UI Controls
     private Button btnMenuTrigger; 
-    
-    private boolean isAudioMode = true; // ডিফল্টভাবে অন থাকবে (সেন্সেই মোড)
-    private long pressedTime;
+    private boolean isAudioMode = true;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        
+        // 1. Activate Crash Handler (সবার আগে এটা রান হবে)
+        Thread.setDefaultUncaughtExceptionHandler(new CrashHandler(this));
+
         setContentView(R.layout.activity_main);
 
         myWebView = findViewById(R.id.main_webview);
@@ -75,62 +73,77 @@ public class MainActivity extends AppCompatActivity {
         DialogManager.showCyberpunkDialog(this);
         showSenseiToast();
 
-        // মেনু বাটন লজিক (Bottom Sheet ওপেন হবে)
+        // মেনু বাটন ফিক্সড লজিক
         btnMenuTrigger.setOnClickListener(v -> showControlCenter());
 
         btnRetry.setOnClickListener(v -> checkNetworkAndLoad());
         checkNetworkAndLoad();
     }
 
-    // --- NEW: CONTROL CENTER (Bottom Sheet) ---
-    // এটা ক্র্যাশ করবে না কারণ এটা অ্যাক্টিভিটির পার্ট
+    // --- NEW: CONTROL CENTER (Safe Version) ---
     private void showControlCenter() {
-        final BottomSheetDialog bottomSheetDialog = new BottomSheetDialog(this);
-        bottomSheetDialog.setContentView(R.layout.layout_control_center);
-        
-        // ব্যাকগ্রাউন্ড ট্রান্সপারেন্ট (রাউন্ড শেপ দেখার জন্য)
-        if (bottomSheetDialog.getWindow() != null) {
-            bottomSheetDialog.getWindow().findViewById(com.google.android.material.R.id.design_bottom_sheet).setBackgroundResource(android.R.color.transparent);
+        try {
+            // সাধারণ ডায়লগ ব্যবহার করছি যা ক্র্যাশ করবে না
+            final Dialog dialog = new Dialog(this);
+            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+            dialog.setContentView(R.layout.layout_control_center);
+
+            // ডায়লগটি স্ক্রিনের নিচে সেট করা (Bottom Sheet এর মত)
+            Window window = dialog.getWindow();
+            if (window != null) {
+                window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+                window.setGravity(Gravity.BOTTOM); // নিচ থেকে আসবে
+                window.getAttributes().windowAnimations = android.R.style.Animation_InputMethod; // স্লাইড এনিমেশন
+            }
+
+            Switch switchAudio = dialog.findViewById(R.id.switch_audio);
+            LinearLayout btnPip = dialog.findViewById(R.id.btn_pip);
+            LinearLayout btnReload = dialog.findViewById(R.id.btn_reload);
+            LinearLayout btnExit = dialog.findViewById(R.id.btn_exit);
+
+            if(switchAudio != null) {
+                switchAudio.setChecked(isAudioMode);
+                switchAudio.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                    isAudioMode = isChecked;
+                    Toast.makeText(this, isAudioMode ? "Background Play: ON" : "Background Play: OFF", Toast.LENGTH_SHORT).show();
+                });
+            }
+
+            if(btnPip != null) {
+                btnPip.setOnClickListener(v -> {
+                    enterPiPMode();
+                    dialog.dismiss();
+                });
+            }
+
+            if(btnReload != null) {
+                btnReload.setOnClickListener(v -> {
+                    myWebView.reload();
+                    dialog.dismiss();
+                });
+            }
+            
+            if(btnExit != null) {
+                btnExit.setOnClickListener(v -> finishAffinity());
+            }
+
+            dialog.show();
+        } catch (Exception e) {
+            Toast.makeText(this, "Menu Error: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
-
-        Switch switchAudio = bottomSheetDialog.findViewById(R.id.switch_audio);
-        LinearLayout btnPip = bottomSheetDialog.findViewById(R.id.btn_pip);
-        LinearLayout btnReload = bottomSheetDialog.findViewById(R.id.btn_reload);
-        LinearLayout btnExit = bottomSheetDialog.findViewById(R.id.btn_exit);
-
-        // Audio Logic
-        switchAudio.setChecked(isAudioMode);
-        switchAudio.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            isAudioMode = isChecked;
-            Toast.makeText(this, isAudioMode ? "Background Play: ON" : "Background Play: OFF", Toast.LENGTH_SHORT).show();
-        });
-
-        // PiP Logic
-        btnPip.setOnClickListener(v -> {
-            enterPiPMode();
-            bottomSheetDialog.dismiss();
-        });
-
-        // Reload Logic
-        btnReload.setOnClickListener(v -> {
-            myWebView.reload();
-            bottomSheetDialog.dismiss();
-        });
-        
-        // Exit
-        btnExit.setOnClickListener(v -> {
-            finishAffinity(); // একদম সব ক্লোজ করে বের হয়ে যাবে
-        });
-
-        bottomSheetDialog.show();
     }
 
     private void enterPiPMode() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            Rational aspectRatio = new Rational(16, 9);
-            PictureInPictureParams.Builder params = new PictureInPictureParams.Builder();
-            params.setAspectRatio(aspectRatio);
-            enterPictureInPictureMode(params.build());
+            try {
+                Rational aspectRatio = new Rational(16, 9);
+                PictureInPictureParams.Builder params = new PictureInPictureParams.Builder();
+                params.setAspectRatio(aspectRatio);
+                enterPictureInPictureMode(params.build());
+            } catch (Exception e) {
+                Toast.makeText(this, "PiP Failed", Toast.LENGTH_SHORT).show();
+            }
         } else {
             Toast.makeText(this, "PiP not supported", Toast.LENGTH_SHORT).show();
         }
@@ -169,22 +182,16 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
         webSettings.setDatabaseEnabled(true);
-        webSettings.setMediaPlaybackRequiresUserGesture(false); // অটোপ্লে এবং ব্যাকগ্রাউন্ড প্লে ফিক্স
+        webSettings.setMediaPlaybackRequiresUserGesture(false);
         webSettings.setRenderPriority(WebSettings.RenderPriority.HIGH);
         webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
         webSettings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Mobile Safari/537.36");
 
         myWebView.setWebViewClient(new WebViewClient() {
-            // --- NETWORK LEVEL AD BLOCKING ---
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 String url = request.getUrl().toString().toLowerCase();
-                // অ্যাড সার্ভার ডোমেইন ব্লক করা হচ্ছে
-                if (url.contains("googleads") || 
-                    url.contains("doubleclick") || 
-                    url.contains("adservice") || 
-                    url.contains("googlesyndication")) {
-                    // অ্যাড রিকোয়েস্ট পেলে খালি রেসপন্স রিটার্ন করবে (ব্লক)
+                if (url.contains("googleads") || url.contains("doubleclick") || url.contains("adservice")) {
                     InputStream empty = new ByteArrayInputStream("".getBytes());
                     return new WebResourceResponse("text/plain", "utf-8", empty);
                 }
@@ -215,7 +222,7 @@ public class MainActivity extends AppCompatActivity {
                 mFullscreenContainer.setVisibility(View.VISIBLE);
                 mFullscreenContainer.addView(view);
                 mCustomViewCallback = callback;
-                btnMenuTrigger.setVisibility(View.GONE); // হাইড বাটন
+                btnMenuTrigger.setVisibility(View.GONE);
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
             }
@@ -228,20 +235,17 @@ public class MainActivity extends AppCompatActivity {
                 mFullscreenContainer.removeView(mCustomView);
                 mCustomView = null;
                 mCustomViewCallback.onCustomViewHidden();
-                btnMenuTrigger.setVisibility(View.VISIBLE); // শো বাটন
+                btnMenuTrigger.setVisibility(View.VISIBLE);
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
             }
         });
     }
 
-    // --- BACKGROUND PLAY LOGIC ---
     @Override
     protected void onPause() {
-        // যদি অডিও মোড অন থাকে, তাহলে আমরা WebView কে Pause হতে দিব না
         if (isAudioMode) {
-            super.onPause(); // শুধু অ্যাক্টিভিটি পজ হবে
-            // myWebView.onPause() কল করা যাবে না!
+            super.onPause();
         } else {
             myWebView.onPause();
             super.onPause();
