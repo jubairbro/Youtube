@@ -43,11 +43,5 @@ public class DialogManager {
 
         dialog.setCancelable(false);
         dialog.show();
-        Window window = dialog.getWindow();
-        if (window != null) {
-            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-       }
-
-        
     }
 }
