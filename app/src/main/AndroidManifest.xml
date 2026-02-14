@@ -9,7 +9,7 @@
         android:name=".SenseiApp"
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
-        android:label="GoodTube Pro"
+        android:label="YouTube Lite"
         android:theme="@style/Theme.AppCompat.NoActionBar"
         android:hardwareAccelerated="true"
         android:supportsRtl="true"
