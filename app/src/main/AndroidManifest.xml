@@ -6,12 +6,12 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" /> 
 
     <application
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
-        android:label="YouTube Lite" 
+        android:label="YouTube Lite"
         android:theme="@style/Theme.AppCompat.NoActionBar"
         android:hardwareAccelerated="true"
         android:largeHeap="true">
@@ -31,7 +31,8 @@
         <service 
             android:name=".services.BackgroundAudioService"
             android:enabled="true"
-            android:exported="false" />
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
             
     </application>
 </manifest>

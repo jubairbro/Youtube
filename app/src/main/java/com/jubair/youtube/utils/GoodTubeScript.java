@@ -12,7 +12,7 @@ public class GoodTubeScript {
                 ".ytm-app-upsell, [aria-label=\"Open App\"] { display: none !important; }" +
                 "ytm-companion-slot, ytm-promoted-video-renderer { display: none !important; }" +
                 
-                // Hide Shorts (Optional - Clean UI)
+                // Hide Shorts (Clean UI)
                 "ytm-pivot-bar-item-renderer:has(> .pivot-shorts), ytd-reel-shelf-renderer { display: none !important; }" +
                 
                 // --- VIDEO MODE UI (Native Feel) ---
@@ -23,7 +23,7 @@ public class GoodTubeScript {
                 "body.video-playing #header-bar { display: none !important; }" +
                 "body.video-playing ytm-search { display: none !important; }" +
                 
-                // Player Fixes
+                // Player Fixes (PiP মোডে শুধু ভিডিও দেখাবে)
                 "body.video-playing #player-container-id { position: fixed !important; top: 0 !important; width: 100% !important; z-index: 9999 !important; background: #000 !important; }" +
                 "';" +
                 "document.head.appendChild(style);" +
@@ -44,10 +44,9 @@ public class GoodTubeScript {
                 "       var overlayClose = document.querySelector('.ytp-ad-overlay-close-button');" +
                 "       if(overlayClose) overlayClose.click();" +
                 
-                "       // Force Background Play" +
+                "       // Force Background Play Hack" +
                 "       var video = document.querySelector('video');" +
                 "       if(video) {" +
-                "           video.setAttribute('playsinline', 'true');" +
                 "           // Notify Java App about Play/Pause State" +
                 "           if(!video.paused) { Android.onVideoPlay(); }" +
                 "           else { Android.onVideoPause(); }" +
