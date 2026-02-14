@@ -8,19 +8,7 @@
     <WebView
         android:id="@+id/main_webview"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:layout_marginBottom="40dp"/> <TextView
-        android:id="@+id/persistent_toast"
-        android:layout_width="match_parent"
-        android:layout_height="40dp"
-        android:layout_gravity="bottom"
-        android:background="#111111"
-        android:text="Jubair Sensei"
-        android:textColor="#00FF00"
-        android:textStyle="bold"
-        android:gravity="center"
-        android:textSize="14sp"
-        android:elevation="10dp"/>
+        android:layout_height="match_parent"/>
 
     <RelativeLayout
         android:id="@+id/offline_layout"
@@ -32,10 +20,10 @@
 
         <ImageView
             android:id="@+id/img_no_net"
-            android:layout_width="100dp"
-            android:layout_height="100dp"
-            android:src="@drawable/ic_wifi_off"
-            android:tint="#FF0000"
+            android:layout_width="80dp"
+            android:layout_height="80dp"
+            android:src="@drawable/ic_launcher"
+            android:tint="#555555"
             android:layout_centerHorizontal="true"
             android:layout_marginBottom="20dp"/>
 
@@ -43,10 +31,9 @@
             android:id="@+id/txt_offline"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="SYSTEM OFFLINE"
-            android:textColor="#FF0000"
-            android:textSize="24sp"
-            android:textStyle="bold"
+            android:text="No Internet Connection"
+            android:textColor="#AAAAAA"
+            android:textSize="18sp"
             android:layout_below="@id/img_no_net"
             android:layout_centerHorizontal="true"/>
 
@@ -55,9 +42,9 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="30dp"
-            android:text="RECONNECT"
-            android:backgroundTint="#FF0000"
-            android:textColor="#000000"
+            android:text="RETRY"
+            android:backgroundTint="#333333"
+            android:textColor="#FFFFFF"
             android:layout_below="@id/txt_offline"
             android:layout_centerHorizontal="true"/>
     </RelativeLayout>

@@ -2,9 +2,12 @@ package com.jubair.youtube;
 
 import android.annotation.SuppressLint;
 import android.app.PictureInPictureParams;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.net.ConnectivityManager;
+import android.net.NetworkInfo;
 import android.os.Build;
 import android.os.Bundle;
 import android.util.Rational;
@@ -17,18 +20,23 @@ import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
+import android.widget.Button;
 import android.widget.FrameLayout;
+import android.widget.RelativeLayout;
+import android.widget.Toast;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.jubair.youtube.managers.AdBlocker;
 import com.jubair.youtube.services.BackgroundAudioService;
 import com.jubair.youtube.ui.DialogManager;
 import com.jubair.youtube.utils.ScriptInjector;
+import com.jubair.youtube.utils.CrashHandler;
 
 public class MainActivity extends AppCompatActivity {
 
     private WebView myWebView;
     private FrameLayout mFullscreenContainer;
+    private RelativeLayout mOfflineLayout;
     private View mCustomView;
     private WebChromeClient.CustomViewCallback mCustomViewCallback;
 
@@ -37,21 +45,34 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // ১. ব্যাকগ্রাউন্ড সার্ভিস চালু করা (গুরুত্বপূর্ণ)
+        // ক্র্যাশ হ্যান্ডলার সেটআপ
+        Thread.setDefaultUncaughtExceptionHandler(new CrashHandler(this));
+        
+        // ব্যাকগ্রাউন্ড অডিও সার্ভিস চালু
         startService(new Intent(this, BackgroundAudioService.class));
         
-        // ২. স্ক্রিন অন রাখা (ভিডিও দেখার সময়)
+        // স্ক্রিন অন রাখা (ভিডিও দেখার সময় ডিম হবে না)
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         setContentView(R.layout.activity_main);
 
+        // ভিউ বাইন্ডিং
         myWebView = findViewById(R.id.main_webview);
         mFullscreenContainer = findViewById(R.id.fullscreen_container);
+        mOfflineLayout = findViewById(R.id.offline_layout);
+        Button btnRetry = findViewById(R.id.btn_retry);
 
         initWebView();
         
-        // ৩. ডায়লগ শো করা (যদি ইউজার অফ না করে থাকে)
-        DialogManager.showCyberpunkDialog(this);
+        // টোস্ট এবং ওয়েলকাম ডায়লগ (শুধু একবার আসবে)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !isInPictureInPictureMode()) {
+            Toast.makeText(this, "Jubair Sensei", Toast.LENGTH_SHORT).show();
+            DialogManager.showWelcomeDialog(this);
+        }
+
+        // রিট্রাই বাটন লজিক
+        btnRetry.setOnClickListener(v -> checkNetworkAndLoad());
+        checkNetworkAndLoad();
     }
 
     private void initWebView() {
@@ -59,15 +80,20 @@ public class MainActivity extends AppCompatActivity {
         webSettings.setJavaScriptEnabled(true);
         webSettings.setDomStorageEnabled(true);
         webSettings.setDatabaseEnabled(true);
-        webSettings.setMediaPlaybackRequiresUserGesture(false); // অটো প্লে এবং ব্যাকগ্রাউন্ড অডিওর জন্য
+        webSettings.setMediaPlaybackRequiresUserGesture(false); // অটোপ্লে এর জন্য জরুরি
         
-        // Desktop/Premium User Agent
+        // মিক্সড কন্টেন্ট (SSL) হ্যান্ডলিং
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        }
+        
+        // প্রিমিয়াম ইউজার এজেন্ট (ডেস্কটপ মোড নয়, তবে হাই-এন্ড মোবাইল)
         webSettings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36");
 
         myWebView.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                // ৪. অ্যাড ব্লকার ক্লাস কল করা
+                // অ্যাড ব্লকার: নেটওয়ার্ক লেভেলে অ্যাড ইউআরএল ব্লক করা
                 if (AdBlocker.isAd(request.getUrl().toString())) {
                     return AdBlocker.createEmptyResponse();
                 }
@@ -76,20 +102,27 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                // ৫. স্ক্রিপ্ট ইনজেক্ট করা (UI ক্লিনআপ)
+                // স্ক্রিপ্ট ইনজেকশন (UI ক্লিনআপ এবং অটো স্কিপ)
                 view.loadUrl(ScriptInjector.getInjectScript());
                 super.onPageFinished(view, url);
+            }
+            
+            @Override
+            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+                // নেটওয়ার্ক এরর হলে অফলাইন পেজ দেখানো
+                myWebView.setVisibility(View.GONE);
+                mOfflineLayout.setVisibility(View.VISIBLE);
             }
         });
 
         myWebView.setWebChromeClient(new WebChromeClient() {
-            // ৬. পারমিশন (মাইক্রোফোন ইত্যাদি) অটো অ্যালাউ
+            // পারমিশন অটো অ্যালাউ (মাইক্রোফোন ইত্যাদি)
             @Override
             public void onPermissionRequest(PermissionRequest request) {
                 request.grant(request.getResources());
             }
 
-            // ৭. ফুলস্ক্রিন এবং রোটেশন লজিক
+            // --- ফুলস্ক্রিন এবং রোটেশন লজিক ---
             @Override
             public void onShowCustomView(View view, CustomViewCallback callback) {
                 if (mCustomView != null) {
@@ -102,7 +135,7 @@ public class MainActivity extends AppCompatActivity {
                 mFullscreenContainer.addView(view);
                 mCustomViewCallback = callback;
                 
-                // ল্যান্ডস্কেপ মোড ফোর্স করা
+                // ফুলস্ক্রিন মোড অন এবং ল্যান্ডস্কেপ রোটেশন
                 getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
             }
@@ -116,38 +149,52 @@ public class MainActivity extends AppCompatActivity {
                 mCustomView = null;
                 mCustomViewCallback.onCustomViewHidden();
                 
-                // পোর্ট্রেট মোড ফেরত আনা
+                // পোর্ট্রেট মোডে ফেরত আসা
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
             }
         });
 
+        // ডিফল্ট ইউআরএল লোড
         if (myWebView.getUrl() == null) {
             myWebView.loadUrl("https://m.youtube.com");
         }
     }
 
-    // ৮. ব্যাকগ্রাউন্ড প্লে লজিক (সবচেয়ে ট্রিকি পার্ট)
+    // --- নেটওয়ার্ক চেকিং ---
+    private void checkNetworkAndLoad() {
+        if (isNetworkAvailable()) {
+            mOfflineLayout.setVisibility(View.GONE);
+            myWebView.setVisibility(View.VISIBLE);
+            if (myWebView.getUrl() == null) myWebView.loadUrl("https://m.youtube.com");
+            else myWebView.reload();
+        } else {
+            myWebView.setVisibility(View.GONE);
+            mOfflineLayout.setVisibility(View.VISIBLE);
+        }
+    }
+
+    private boolean isNetworkAvailable() {
+        ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+        NetworkInfo ni = cm.getActiveNetworkInfo();
+        return ni != null && ni.isConnected();
+    }
+
+    // --- ব্যাকগ্রাউন্ড প্লে লজিক ---
     @Override
     protected void onPause() {
-        // সুপার কল করলেও আমরা ওয়েবভিউ পজ করব না
+        // WebView কে পজ হতে দিচ্ছি না, যাতে অডিও চলতে থাকে
         super.onPause();
-        // myWebView.onPause(); // এই লাইনটা ইচ্ছা করে বাদ দেওয়া হয়েছে
-        
-        // PiP মোডে না থাকলে ব্যাকগ্রাউন্ড সার্ভিস চালু থাকবে
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && !isInPictureInPictureMode()) {
-            // অ্যাপ মিনিমাইজ হলেও গান চলবে
-        }
     }
 
     @Override
     protected void onDestroy() {
-        // অ্যাপ পুরোপুরি বন্ধ করলে সার্ভিস থামবে
+        // অ্যাপ পুরোপুরি বন্ধ হলে সার্ভিস স্টপ হবে
         stopService(new Intent(this, BackgroundAudioService.class));
         super.onDestroy();
     }
 
-    // ৯. অটো PiP (হোম বাটন চাপলে)
+    // --- অটো PiP (হোম বাটন চাপলে) ---
     @Override
     protected void onUserLeaveHint() {
         super.onUserLeaveHint();
@@ -158,22 +205,36 @@ public class MainActivity extends AppCompatActivity {
                 params.setAspectRatio(aspectRatio);
                 enterPictureInPictureMode(params.build());
             } catch (Exception e) {
-                // PiP সাপোর্ট না করলে কিছু হবে না, ব্যাকগ্রাউন্ড অডিও চলবে
+                // PiP সাপোর্ট না করলে কিছু হবে না
             }
         }
     }
 
     @Override
+    public void onPictureInPictureModeChanged(boolean isInPictureInPictureMode, Configuration newConfig) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig);
+        if (isInPictureInPictureMode) {
+            // PiP মোডে অফলাইন লেআউট হাইড রাখা ভালো
+            mOfflineLayout.setVisibility(View.GONE);
+        } else {
+            if (myWebView.getUrl() == null) checkNetworkAndLoad();
+        }
+    }
+
+    // --- ব্যাক বাটন হ্যান্ডেলিং ---
+    @Override
     public void onBackPressed() {
         if (mCustomView != null) {
+            // ফুলস্ক্রিন থেকে বের হওয়া
             WebChromeClient wcc = myWebView.getWebChromeClient();
             if (wcc != null) wcc.onHideCustomView();
             return;
         }
         if (myWebView.canGoBack()) {
+            // ব্রাউজারে ব্যাক করা
             myWebView.goBack();
         } else {
-            // ব্যাকগ্রাউন্ডে পাঠিয়ে দাও, বন্ধ করো না
+            // হোম এ ব্যাক করা (অ্যাপ ব্যাকগ্রাউন্ডে থাকবে)
             moveTaskToBack(true);
         }
     }
