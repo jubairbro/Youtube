@@ -4,18 +4,24 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-
-    <application
+    <uses-permission android:name="android.permission.RECORD_AUDIO" /> <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" /> <uses-permission android:name="android.permission.FOREGROUND_SERVICE" /> <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" /> <application
+        android:name=".SenseiApp"
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
-        android:label="GoodTube App"
+        android:label="GoodTube Pro"
         android:theme="@style/Theme.AppCompat.NoActionBar"
         android:hardwareAccelerated="true"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"> <activity
+        android:usesCleartextTraffic="true"
+        android:largeHeap="true">
+
+        <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
+            android:screenOrientation="sensor"
             android:supportsPictureInPicture="true">
             
             <intent-filter>
@@ -23,5 +29,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <service 
+            android:name=".services.BackgroundAudioService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+            
     </application>
 </manifest>
