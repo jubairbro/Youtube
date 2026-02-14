@@ -30,7 +30,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.jubair.youtube.managers.AdBlocker;
 import com.jubair.youtube.services.BackgroundAudioService;
-import com.jubair.youtube.utils.GoodTubeScript;
+import com.jubair.youtube.utils.ScriptLoader; // নতুন লোডার
 import com.jubair.youtube.ui.DialogManager;
 
 public class MainActivity extends AppCompatActivity {
@@ -58,15 +58,16 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Media Controls Receiver
+    // Media Receiver
     private final BroadcastReceiver mediaReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            if ("ACTION_PLAY".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('play')", null);
-            else if ("ACTION_PAUSE".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('pause')", null);
-            else if ("ACTION_NEXT".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('next')", null);
-            else if ("ACTION_PREV".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('prev')", null);
+            // GoodTube Player কন্ট্রোল করা
+            if ("ACTION_PLAY".equals(action)) myWebView.evaluateJavascript("document.querySelector('video').play();", null);
+            else if ("ACTION_PAUSE".equals(action)) myWebView.evaluateJavascript("document.querySelector('video').pause();", null);
+            else if ("ACTION_NEXT".equals(action)) myWebView.evaluateJavascript("document.querySelector('.ytp-next-button').click();", null);
+            else if ("ACTION_PREV".equals(action)) myWebView.evaluateJavascript("document.querySelector('.ytp-prev-button').click();", null);
         }
     };
 
@@ -75,7 +76,6 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // Register Receiver
         IntentFilter filter = new IntentFilter();
         filter.addAction("ACTION_PLAY");
         filter.addAction("ACTION_PAUSE");
@@ -108,28 +108,51 @@ public class MainActivity extends AppCompatActivity {
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        // JS Interface Add
+        settings.setAllowFileAccess(true); // Assets রিড করার জন্য
+        
         myWebView.addJavascriptInterface(new WebAppInterface(), "Android");
         
-        // Mobile User Agent (Best for Vanced Feel)
+        // Desktop User Agent (GoodTube ডেস্কটপ মোডে সবচেয়ে ভালো কাজ করে)
+        // তবে আমরা মোবাইল সাইজে ফিট করার জন্য CSS দিয়ে সাইজ ঠিক করব
         settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36");
 
         myWebView.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                if (AdBlocker.isAd(request.getUrl().toString())) return AdBlocker.createEmptyResponse();
+                // গুগলের ভিডিও সার্ভার এবং এড সার্ভার চেক করা
+                if (AdBlocker.isAd(request.getUrl().toString())) {
+                    return AdBlocker.createEmptyResponse();
+                }
                 return super.shouldInterceptRequest(view, request);
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                view.loadUrl(GoodTubeScript.getInjectScript());
+                // ১. GoodTube Engine ইনজেক্ট করা (Assets থেকে)
+                String goodTubeScript = ScriptLoader.loadGoodTube(MainActivity.this);
+                if (!goodTubeScript.isEmpty()) {
+                    view.loadUrl(goodTubeScript);
+                }
+
+                // ২. এক্সট্রা হ্যাক (UI ক্লিনআপ এবং ব্যাকগ্রাউন্ড প্লে)
+                view.loadUrl("javascript:(function() {" +
+                        // ভিডিও প্লে হলে জাভা অ্যাপকে জানানো
+                        "var video = document.querySelector('video');" +
+                        "if(video) {" +
+                        "   video.addEventListener('play', function() { Android.onVideoPlay(); });" +
+                        "   video.addEventListener('pause', function() { Android.onVideoPause(); });" +
+                        "}" +
+                        // হিউম্যান ভেরিফিকেশন পপআপ রিমুভ
+                        "var popup = document.querySelector('.yt-consent-banner');" +
+                        "if(popup) popup.remove();" +
+                        "})()");
+                
                 super.onPageFinished(view, url);
             }
             
             @Override
             public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                if (errorCode == -2) { // No Internet
+                if (errorCode == -2) {
                     myWebView.setVisibility(View.GONE);
                     mOfflineLayout.setVisibility(View.VISIBLE);
                 }
@@ -169,7 +192,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onPause() { super.onPause(); } // Do nothing (Keep playing)
+    protected void onPause() { super.onPause(); } 
 
     @Override
     protected void onDestroy() {
