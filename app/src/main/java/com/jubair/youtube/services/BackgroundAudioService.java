@@ -11,7 +11,6 @@ import android.os.IBinder;
 import android.support.v4.media.session.MediaSessionCompat;
 import android.support.v4.media.session.PlaybackStateCompat;
 import androidx.core.app.NotificationCompat;
-import androidx.media.session.MediaButtonReceiver;
 import com.jubair.youtube.MainActivity;
 import com.jubair.youtube.R;
 
@@ -20,85 +19,115 @@ public class BackgroundAudioService extends Service {
     private static final String CHANNEL_ID = "YouTubeLiteAudioChannel";
     private static final int NOTIFICATION_ID = 111;
 
+    // অ্যাকশন কমান্ডস
+    public static final String ACTION_PLAY = "com.jubair.youtube.ACTION_PLAY";
+    public static final String ACTION_PAUSE = "com.jubair.youtube.ACTION_PAUSE";
+    public static final String ACTION_NEXT = "com.jubair.youtube.ACTION_NEXT";
+    public static final String ACTION_PREV = "com.jubair.youtube.ACTION_PREV";
+    public static final String ACTION_STOP = "com.jubair.youtube.ACTION_STOP";
+
     @Override
     public void onCreate() {
         super.onCreate();
         createChannel();
 
+        // লক স্ক্রিন কন্ট্রোলের জন্য মিডিয়া সেশন
         mediaSession = new MediaSessionCompat(this, "YouTubeLiteSession");
         mediaSession.setFlags(MediaSessionCompat.FLAG_HANDLES_MEDIA_BUTTONS | MediaSessionCompat.FLAG_HANDLES_TRANSPORT_CONTROLS);
-        
-        mediaSession.setCallback(new MediaSessionCompat.Callback() {
-            @Override
-            public void onPlay() {
-                sendBroadcast(new Intent("ACTION_PLAY"));
-                updateNotification(true);
-            }
-            @Override
-            public void onPause() {
-                sendBroadcast(new Intent("ACTION_PAUSE"));
-                updateNotification(false);
-            }
-            @Override
-            public void onSkipToNext() {
-                sendBroadcast(new Intent("ACTION_NEXT"));
-            }
-            @Override
-            public void onSkipToPrevious() {
-                sendBroadcast(new Intent("ACTION_PREV"));
-            }
-        });
-        
         mediaSession.setActive(true);
     }
 
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        if (intent != null) {
+            String action = intent.getAction();
+            
+            // ১. নোটিফিকেশন বাটন হ্যান্ডলিং
+            if (ACTION_PLAY.equals(action)) {
+                sendBroadcastToActivity("PLAY");
+                updateNotification(true);
+            } else if (ACTION_PAUSE.equals(action)) {
+                sendBroadcastToActivity("PAUSE");
+                updateNotification(false);
+            } else if (ACTION_NEXT.equals(action)) {
+                sendBroadcastToActivity("NEXT");
+            } else if (ACTION_PREV.equals(action)) {
+                sendBroadcastToActivity("PREV");
+            } else if (ACTION_STOP.equals(action)) {
+                stopForeground(true);
+                stopSelf();
+                return START_NOT_STICKY;
+            }
+            
+            // ২. মেইন অ্যাক্টিভিটি থেকে স্ট্যাটাস আপডেট আসলে
+            if (intent.hasExtra("IS_PLAYING")) {
+                boolean isPlaying = intent.getBooleanExtra("IS_PLAYING", false);
+                updateNotification(isPlaying);
+            }
+        }
+        return START_STICKY;
+    }
+
+    // অ্যাক্টিভিটিতে সিগনাল পাঠানো
+    private void sendBroadcastToActivity(String command) {
+        Intent intent = new Intent("MEDIA_CONTROL");
+        intent.putExtra("COMMAND", command);
+        sendBroadcast(intent);
+    }
+
     public void updateNotification(boolean isPlaying) {
+        // প্লে/পজ আইকন এবং টেক্সট সেট করা
         int playPauseIcon = isPlaying ? android.R.drawable.ic_media_pause : android.R.drawable.ic_media_play;
+        String actionToTrigger = isPlaying ? ACTION_PAUSE : ACTION_PLAY;
         String statusText = isPlaying ? "Playing" : "Paused";
-        
-        // Playback State সেট করা (লক স্ক্রিনের জন্য মাস্ট)
+
+        // মিডিয়া সেশন স্টেট আপডেট (লক স্ক্রিনের জন্য)
         int state = isPlaying ? PlaybackStateCompat.STATE_PLAYING : PlaybackStateCompat.STATE_PAUSED;
         mediaSession.setPlaybackState(new PlaybackStateCompat.Builder()
                 .setActions(PlaybackStateCompat.ACTION_PLAY | PlaybackStateCompat.ACTION_PAUSE | PlaybackStateCompat.ACTION_SKIP_TO_NEXT | PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS)
                 .setState(state, PlaybackStateCompat.PLAYBACK_POSITION_UNKNOWN, 1)
                 .build());
 
-        // নোটিফিকেশন তৈরি
-        Notification notification = new NotificationCompat.Builder(this, CHANNEL_ID)
+        // নোটিফিকেশন বিল্ডার
+        NotificationCompat.Builder builder = new NotificationCompat.Builder(this, CHANNEL_ID)
                 .setSmallIcon(R.drawable.ic_launcher)
                 .setContentTitle("YouTube Lite")
                 .setContentText(statusText)
                 .setSubText("Background Play")
-                .setLargeIcon(null) // চাইলে এখানে অ্যালবাম আর্ট দেওয়া যায়
-                .setOngoing(isPlaying) // প্লে থাকলে নোটিফিকেশন সরবে না
+                .setOngoing(isPlaying) // প্লে থাকলে সরানো যাবে না
                 .setShowWhen(false)
                 .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
-                .setContentIntent(PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE))
-                // মিডিয়া স্টাইল (সবচেয়ে গুরুত্বপূর্ণ)
+                .setContentIntent(PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT))
+                
+                // মিডিয়া স্টাইল (নোটিফিকেশন বড় দেখানোর জন্য)
                 .setStyle(new androidx.media.app.NotificationCompat.MediaStyle()
                         .setMediaSession(mediaSession.getSessionToken())
-                        .setShowActionsInCompactView(0, 1, 2)) // Prev, Play/Pause, Next
-                // অ্যাকশন বাটন
-                .addAction(android.R.drawable.ic_media_previous, "Prev", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_PREVIOUS))
-                .addAction(playPauseIcon, "Play", MediaButtonReceiver.buildMediaButtonPendingIntent(this, isPlaying ? PlaybackStateCompat.ACTION_PAUSE : PlaybackStateCompat.ACTION_PLAY))
-                .addAction(android.R.drawable.ic_media_next, "Next", MediaButtonReceiver.buildMediaButtonPendingIntent(this, PlaybackStateCompat.ACTION_SKIP_TO_NEXT))
-                .build();
+                        .setShowActionsInCompactView(0, 1, 2));
 
-        startForeground(NOTIFICATION_ID, notification);
+        // বাটন ১: Prev
+        builder.addAction(android.R.drawable.ic_media_previous, "Prev", 
+                generateActionIntent(ACTION_PREV));
+
+        // বাটন ২: Play/Pause (ডাইনামিক)
+        builder.addAction(playPauseIcon, "Play", 
+                generateActionIntent(actionToTrigger));
+
+        // বাটন ৩: Next
+        builder.addAction(android.R.drawable.ic_media_next, "Next", 
+                generateActionIntent(ACTION_NEXT));
+        
+        // ক্লোজ বাটন (অপশনাল)
+        builder.addAction(android.R.drawable.ic_menu_close_clear_cancel, "Close", 
+                generateActionIntent(ACTION_STOP));
+
+        startForeground(NOTIFICATION_ID, builder.build());
     }
 
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
-        MediaButtonReceiver.handleIntent(mediaSession, intent);
-        
-        if (intent != null && intent.hasExtra("IS_PLAYING")) {
-            boolean isPlaying = intent.getBooleanExtra("IS_PLAYING", false);
-            updateNotification(isPlaying);
-        } else {
-            // সার্ভিস যেন কিল না হয় তার জন্য ডিফল্ট নোটিফিকেশন
-            updateNotification(false); 
-        }
-        return START_STICKY;
+    // বাটন ক্লিকের জন্য পেন্ডিং ইনটেন্ট জেনারেটর
+    private PendingIntent generateActionIntent(String action) {
+        Intent intent = new Intent(this, BackgroundAudioService.class);
+        intent.setAction(action);
+        return PendingIntent.getService(this, 0, intent, PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
     }
 
     @Override
@@ -113,9 +142,7 @@ public class BackgroundAudioService extends Service {
     private void createChannel() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             NotificationManager manager = getSystemService(NotificationManager.class);
-            // চ্যানেল ইম্পর্টেন্স 'LOW' দেওয়া হয়েছে যাতে সাউন্ড না করে শুধু ভিজুয়্যাল থাকে
             NotificationChannel channel = new NotificationChannel(CHANNEL_ID, "Background Playback", NotificationManager.IMPORTANCE_LOW);
-            channel.setDescription("Shows media controls for YouTube Lite");
             channel.setShowBadge(false);
             channel.setLockscreenVisibility(Notification.VISIBILITY_PUBLIC);
             manager.createNotificationChannel(channel);

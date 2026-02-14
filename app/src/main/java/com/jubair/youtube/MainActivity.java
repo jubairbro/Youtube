@@ -44,38 +44,65 @@ public class MainActivity extends AppCompatActivity {
     private WebChromeClient.CustomViewCallback mCustomViewCallback;
     private AudioManager audioManager;
 
-    // JavaScript Bridge (Video State Detector)
+    // JavaScript Bridge (ভিডিওর আসল অবস্থা ডিটেক্ট করবে)
     public class WebAppInterface {
         @JavascriptInterface
         public void onVideoPlay() {
-            // ভিডিও চললে সার্ভিস স্টার্ট হবে এবং অডিও ফোকাস নিবে
-            Intent serviceIntent = new Intent(MainActivity.this, BackgroundAudioService.class);
-            serviceIntent.putExtra("IS_PLAYING", true);
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(serviceIntent);
+            // ভিডিও চললে সার্ভিস স্টার্ট হবে
+            if (!isServiceRunning) {
+                startAudioService(true);
             } else {
-                startService(serviceIntent);
+                updateServiceState(true);
             }
             requestAudioFocus();
         }
 
         @JavascriptInterface
         public void onVideoPause() {
-            Intent serviceIntent = new Intent(MainActivity.this, BackgroundAudioService.class);
-            serviceIntent.putExtra("IS_PLAYING", false);
-            startService(serviceIntent);
+            updateServiceState(false);
         }
     }
 
-    // Media Controls Receiver
-    private final BroadcastReceiver mediaReceiver = new BroadcastReceiver() {
+    private boolean isServiceRunning = false;
+
+    private void startAudioService(boolean isPlaying) {
+        Intent serviceIntent = new Intent(this, BackgroundAudioService.class);
+        serviceIntent.putExtra("IS_PLAYING", isPlaying);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(serviceIntent);
+        } else {
+            startService(serviceIntent);
+        }
+        isServiceRunning = true;
+    }
+
+    private void updateServiceState(boolean isPlaying) {
+        Intent serviceIntent = new Intent(this, BackgroundAudioService.class);
+        serviceIntent.putExtra("IS_PLAYING", isPlaying);
+        startService(serviceIntent);
+    }
+
+    // সার্ভিস থেকে বাটন ক্লিকের সিগনাল রিসিভ করা
+    private final BroadcastReceiver serviceReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
-            String action = intent.getAction();
-            if ("ACTION_PLAY".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('play')", null);
-            else if ("ACTION_PAUSE".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('pause')", null);
-            else if ("ACTION_NEXT".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('next')", null);
-            else if ("ACTION_PREV".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('prev')", null);
+            String command = intent.getStringExtra("COMMAND");
+            if (command != null) {
+                switch (command) {
+                    case "PLAY":
+                        myWebView.evaluateJavascript("document.querySelector('video').play();", null);
+                        break;
+                    case "PAUSE":
+                        myWebView.evaluateJavascript("document.querySelector('video').pause();", null);
+                        break;
+                    case "NEXT":
+                        myWebView.evaluateJavascript("if(document.querySelector('.ytp-next-button')) document.querySelector('.ytp-next-button').click();", null);
+                        break;
+                    case "PREV":
+                        myWebView.evaluateJavascript("if(document.querySelector('.ytp-prev-button')) document.querySelector('.ytp-prev-button').click();", null);
+                        break;
+                }
+            }
         }
     };
 
@@ -84,33 +111,26 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // ১. নোটিফিকেশন পারমিশন চাওয়া (Android 13+)
+        // নোটিফিকেশন পারমিশন
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 101);
             }
         }
 
-        // ২. অডিও ফোকাস সেটআপ
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        requestAudioFocus();
 
-        // ৩. রিসিভার রেজিস্টার
-        IntentFilter filter = new IntentFilter();
-        filter.addAction("ACTION_PLAY");
-        filter.addAction("ACTION_PAUSE");
-        filter.addAction("ACTION_NEXT");
-        filter.addAction("ACTION_PREV");
+        // রিসিভার রেজিস্টার
+        IntentFilter filter = new IntentFilter("MEDIA_CONTROL");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            registerReceiver(mediaReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
+            registerReceiver(serviceReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
         } else {
-            registerReceiver(mediaReceiver, filter);
+            registerReceiver(serviceReceiver, filter);
         }
 
-        // সার্ভিস স্টার্ট (ডিফল্ট)
-        startService(new Intent(this, BackgroundAudioService.class));
-        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+        // দ্রষ্টব্য: onCreate এ সার্ভিস স্টার্ট করা বাদ দিয়েছি
 
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         setContentView(R.layout.activity_main);
 
         myWebView = findViewById(R.id.main_webview);
@@ -134,7 +154,7 @@ public class MainActivity extends AppCompatActivity {
         WebSettings settings = myWebView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setMediaPlaybackRequiresUserGesture(false); // অটোপ্লে এবং আনমিউট ফিক্স
+        settings.setMediaPlaybackRequiresUserGesture(false); 
         
         myWebView.addJavascriptInterface(new WebAppInterface(), "Android");
         settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36");
@@ -150,7 +170,10 @@ public class MainActivity extends AppCompatActivity {
             public void onPageFinished(WebView view, String url) {
                 view.loadUrl(GoodTubeScript.getInjectScript());
                 // এক্সট্রা আনমিউট স্ক্রিপ্ট
-                view.loadUrl("javascript:(function(){ var unmuteBtn = document.querySelector('.ytp-unmute'); if(unmuteBtn) unmuteBtn.click(); })();");
+                view.loadUrl("javascript:(function(){ " +
+                        " var unmuteBtn = document.querySelector('.ytp-unmute');" +
+                        " if(unmuteBtn) unmuteBtn.click();" +
+                        " })();");
                 super.onPageFinished(view, url);
             }
             
@@ -203,12 +226,11 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onDestroy() {
-        try { unregisterReceiver(mediaReceiver); } catch (Exception e) {}
+        try { unregisterReceiver(serviceReceiver); } catch (Exception e) {}
+        // অ্যাপ পুরোপুরি কিল করলে সার্ভিস বন্ধ হবে (অপশনাল)
         stopService(new Intent(this, BackgroundAudioService.class));
         super.onDestroy();
     }
-
-    // ৪. PiP রিমুভ করা হয়েছে (onUserLeaveHint ডিলিট করে দিয়েছি)
 
     @Override
     public void onBackPressed() {
