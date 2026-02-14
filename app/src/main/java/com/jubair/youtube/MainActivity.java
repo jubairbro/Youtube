@@ -8,6 +8,7 @@ import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
 import android.content.res.Configuration;
+import android.media.AudioManager; // অডিও ম্যানেজার ইম্পোর্ট
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
@@ -30,7 +31,7 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.jubair.youtube.managers.AdBlocker;
 import com.jubair.youtube.services.BackgroundAudioService;
-import com.jubair.youtube.utils.ScriptLoader; // নতুন লোডার
+import com.jubair.youtube.utils.GoodTubeScript;
 import com.jubair.youtube.ui.DialogManager;
 
 public class MainActivity extends AppCompatActivity {
@@ -40,14 +41,16 @@ public class MainActivity extends AppCompatActivity {
     private RelativeLayout mOfflineLayout;
     private View mCustomView;
     private WebChromeClient.CustomViewCallback mCustomViewCallback;
+    private AudioManager audioManager; // অডিও ফোকাস ভেরিয়েবল
 
-    // JavaScript Bridge
     public class WebAppInterface {
         @JavascriptInterface
         public void onVideoPlay() {
             Intent serviceIntent = new Intent(MainActivity.this, BackgroundAudioService.class);
             serviceIntent.putExtra("IS_PLAYING", true);
             startService(serviceIntent);
+            // ভিডিও প্লে হলে অডিও ফোকাস নেওয়া (ব্যাকগ্রাউন্ড কিলের মহৌষধ)
+            requestAudioFocus();
         }
 
         @JavascriptInterface
@@ -58,16 +61,14 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    // Media Receiver
     private final BroadcastReceiver mediaReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
             String action = intent.getAction();
-            // GoodTube Player কন্ট্রোল করা
-            if ("ACTION_PLAY".equals(action)) myWebView.evaluateJavascript("document.querySelector('video').play();", null);
-            else if ("ACTION_PAUSE".equals(action)) myWebView.evaluateJavascript("document.querySelector('video').pause();", null);
-            else if ("ACTION_NEXT".equals(action)) myWebView.evaluateJavascript("document.querySelector('.ytp-next-button').click();", null);
-            else if ("ACTION_PREV".equals(action)) myWebView.evaluateJavascript("document.querySelector('.ytp-prev-button').click();", null);
+            if ("ACTION_PLAY".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('play')", null);
+            else if ("ACTION_PAUSE".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('pause')", null);
+            else if ("ACTION_NEXT".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('next')", null);
+            else if ("ACTION_PREV".equals(action)) myWebView.evaluateJavascript("window.handleMediaKey('prev')", null);
         }
     };
 
@@ -76,6 +77,10 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
+        // ১. অডিও ম্যানেজার ইনিশিয়ালাইজ
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        requestAudioFocus(); // অ্যাপ চালুর সাথে সাথেই ফোকাস নেওয়া
+
         IntentFilter filter = new IntentFilter();
         filter.addAction("ACTION_PLAY");
         filter.addAction("ACTION_PAUSE");
@@ -103,50 +108,41 @@ public class MainActivity extends AppCompatActivity {
         btnRetry.setOnClickListener(v -> myWebView.reload());
     }
 
+    // অডিও ফোকাস মেথড
+    private void requestAudioFocus() {
+        if (audioManager != null) {
+            audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
+        }
+    }
+
     private void initWebView() {
         WebSettings settings = myWebView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setAllowFileAccess(true); // Assets রিড করার জন্য
+        
+        // ২. "Tap to Unmute" ফিক্স (সবচেয়ে জরুরি লাইন)
+        settings.setMediaPlaybackRequiresUserGesture(false); 
         
         myWebView.addJavascriptInterface(new WebAppInterface(), "Android");
         
-        // Desktop User Agent (GoodTube ডেস্কটপ মোডে সবচেয়ে ভালো কাজ করে)
-        // তবে আমরা মোবাইল সাইজে ফিট করার জন্য CSS দিয়ে সাইজ ঠিক করব
+        // ইউজার এজেন্ট (Brave Browser স্টাইল)
         settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36");
 
         myWebView.setWebViewClient(new WebViewClient() {
             @Override
             public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                // গুগলের ভিডিও সার্ভার এবং এড সার্ভার চেক করা
-                if (AdBlocker.isAd(request.getUrl().toString())) {
-                    return AdBlocker.createEmptyResponse();
-                }
+                if (AdBlocker.isAd(request.getUrl().toString())) return AdBlocker.createEmptyResponse();
                 return super.shouldInterceptRequest(view, request);
             }
 
             @Override
             public void onPageFinished(WebView view, String url) {
-                // ১. GoodTube Engine ইনজেক্ট করা (Assets থেকে)
-                String goodTubeScript = ScriptLoader.loadGoodTube(MainActivity.this);
-                if (!goodTubeScript.isEmpty()) {
-                    view.loadUrl(goodTubeScript);
-                }
-
-                // ২. এক্সট্রা হ্যাক (UI ক্লিনআপ এবং ব্যাকগ্রাউন্ড প্লে)
-                view.loadUrl("javascript:(function() {" +
-                        // ভিডিও প্লে হলে জাভা অ্যাপকে জানানো
-                        "var video = document.querySelector('video');" +
-                        "if(video) {" +
-                        "   video.addEventListener('play', function() { Android.onVideoPlay(); });" +
-                        "   video.addEventListener('pause', function() { Android.onVideoPause(); });" +
-                        "}" +
-                        // হিউম্যান ভেরিফিকেশন পপআপ রিমুভ
-                        "var popup = document.querySelector('.yt-consent-banner');" +
-                        "if(popup) popup.remove();" +
-                        "})()");
-                
+                view.loadUrl(GoodTubeScript.getInjectScript());
+                // ৩. এক্সট্রা আনমিউট হ্যাক (JS দিয়ে জোর করে সাউন্ড অন করা)
+                view.loadUrl("javascript:(function(){ " +
+                        " var unmuteBtn = document.querySelector('.ytp-unmute');" +
+                        " if(unmuteBtn) unmuteBtn.click();" +
+                        " })();");
                 super.onPageFinished(view, url);
             }
             
@@ -192,7 +188,11 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onPause() { super.onPause(); } 
+    protected void onPause() { 
+        super.onPause(); 
+        // এখানে myWebView.onPause() কল করা যাবে না!
+        // এটা করলেই ব্যাকগ্রাউন্ডে গান বন্ধ হয়ে যাবে।
+    }
 
     @Override
     protected void onDestroy() {
@@ -201,6 +201,7 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
+    // ৪. PiP ফিক্স (হোম বাটনে চাপলে অটো পপআপ)
     @Override
     protected void onUserLeaveHint() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
