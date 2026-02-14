@@ -48,7 +48,7 @@ public class DialogManager {
 
         // --- 4. মেসেজ ---
         TextView msg = new TextView(context);
-        msg.setText("Protocol Activated:\n\n• Native AdBlocker\n• Background Play\n• PiP Mode Enabled");
+        msg.setText("Protocol Activated:\n\n• Native AdBlocker\n• lightweight app");
         msg.setTextColor(Color.parseColor("#DDDDDD")); // Off-White
         msg.setTextSize(14);
         msg.setLineSpacing(0, 1.2f);

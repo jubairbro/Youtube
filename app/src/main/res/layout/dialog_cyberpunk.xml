@@ -16,7 +16,7 @@
         android:layout_height="wrap_content"/>
 
     <TextView
-        android:text="Jubair Sensei Protocol v2.0\nReady to Initialize?"
+        android:text="Jubair Sensei \nReady to Initialize?"
         android:textColor="#DDDDDD"
         android:textSize="15sp"
         android:gravity="center"
