@@ -1,19 +1,18 @@
 package com.jubair.youtube;
 
+import android.Manifest;
 import android.annotation.SuppressLint;
-import android.app.PictureInPictureParams;
 import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.content.pm.ActivityInfo;
-import android.content.res.Configuration;
-import android.media.AudioManager; // অডিও ম্যানেজার ইম্পোর্ট
+import android.content.pm.PackageManager;
+import android.media.AudioManager;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.os.Build;
 import android.os.Bundle;
-import android.util.Rational;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.JavascriptInterface;
@@ -28,6 +27,8 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.RelativeLayout;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 
 import com.jubair.youtube.managers.AdBlocker;
 import com.jubair.youtube.services.BackgroundAudioService;
@@ -41,15 +42,20 @@ public class MainActivity extends AppCompatActivity {
     private RelativeLayout mOfflineLayout;
     private View mCustomView;
     private WebChromeClient.CustomViewCallback mCustomViewCallback;
-    private AudioManager audioManager; // অডিও ফোকাস ভেরিয়েবল
+    private AudioManager audioManager;
 
+    // JavaScript Bridge (Video State Detector)
     public class WebAppInterface {
         @JavascriptInterface
         public void onVideoPlay() {
+            // ভিডিও চললে সার্ভিস স্টার্ট হবে এবং অডিও ফোকাস নিবে
             Intent serviceIntent = new Intent(MainActivity.this, BackgroundAudioService.class);
             serviceIntent.putExtra("IS_PLAYING", true);
-            startService(serviceIntent);
-            // ভিডিও প্লে হলে অডিও ফোকাস নেওয়া (ব্যাকগ্রাউন্ড কিলের মহৌষধ)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
             requestAudioFocus();
         }
 
@@ -61,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Media Controls Receiver
     private final BroadcastReceiver mediaReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -77,10 +84,18 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // ১. অডিও ম্যানেজার ইনিশিয়ালাইজ
-        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-        requestAudioFocus(); // অ্যাপ চালুর সাথে সাথেই ফোকাস নেওয়া
+        // ১. নোটিফিকেশন পারমিশন চাওয়া (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS}, 101);
+            }
+        }
 
+        // ২. অডিও ফোকাস সেটআপ
+        audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        requestAudioFocus();
+
+        // ৩. রিসিভার রেজিস্টার
         IntentFilter filter = new IntentFilter();
         filter.addAction("ACTION_PLAY");
         filter.addAction("ACTION_PAUSE");
@@ -92,6 +107,7 @@ public class MainActivity extends AppCompatActivity {
             registerReceiver(mediaReceiver, filter);
         }
 
+        // সার্ভিস স্টার্ট (ডিফল্ট)
         startService(new Intent(this, BackgroundAudioService.class));
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
@@ -108,7 +124,6 @@ public class MainActivity extends AppCompatActivity {
         btnRetry.setOnClickListener(v -> myWebView.reload());
     }
 
-    // অডিও ফোকাস মেথড
     private void requestAudioFocus() {
         if (audioManager != null) {
             audioManager.requestAudioFocus(null, AudioManager.STREAM_MUSIC, AudioManager.AUDIOFOCUS_GAIN);
@@ -119,13 +134,9 @@ public class MainActivity extends AppCompatActivity {
         WebSettings settings = myWebView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        
-        // ২. "Tap to Unmute" ফিক্স (সবচেয়ে জরুরি লাইন)
-        settings.setMediaPlaybackRequiresUserGesture(false); 
+        settings.setMediaPlaybackRequiresUserGesture(false); // অটোপ্লে এবং আনমিউট ফিক্স
         
         myWebView.addJavascriptInterface(new WebAppInterface(), "Android");
-        
-        // ইউজার এজেন্ট (Brave Browser স্টাইল)
         settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36");
 
         myWebView.setWebViewClient(new WebViewClient() {
@@ -138,11 +149,8 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 view.loadUrl(GoodTubeScript.getInjectScript());
-                // ৩. এক্সট্রা আনমিউট হ্যাক (JS দিয়ে জোর করে সাউন্ড অন করা)
-                view.loadUrl("javascript:(function(){ " +
-                        " var unmuteBtn = document.querySelector('.ytp-unmute');" +
-                        " if(unmuteBtn) unmuteBtn.click();" +
-                        " })();");
+                // এক্সট্রা আনমিউট স্ক্রিপ্ট
+                view.loadUrl("javascript:(function(){ var unmuteBtn = document.querySelector('.ytp-unmute'); if(unmuteBtn) unmuteBtn.click(); })();");
                 super.onPageFinished(view, url);
             }
             
@@ -190,8 +198,7 @@ public class MainActivity extends AppCompatActivity {
     @Override
     protected void onPause() { 
         super.onPause(); 
-        // এখানে myWebView.onPause() কল করা যাবে না!
-        // এটা করলেই ব্যাকগ্রাউন্ডে গান বন্ধ হয়ে যাবে।
+        // WebView Pause হতে দিচ্ছি না
     }
 
     @Override
@@ -201,18 +208,7 @@ public class MainActivity extends AppCompatActivity {
         super.onDestroy();
     }
 
-    // ৪. PiP ফিক্স (হোম বাটনে চাপলে অটো পপআপ)
-    @Override
-    protected void onUserLeaveHint() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            try {
-                Rational aspectRatio = new Rational(16, 9);
-                PictureInPictureParams.Builder params = new PictureInPictureParams.Builder();
-                params.setAspectRatio(aspectRatio);
-                enterPictureInPictureMode(params.build());
-            } catch (Exception e) {}
-        }
-    }
+    // ৪. PiP রিমুভ করা হয়েছে (onUserLeaveHint ডিলিট করে দিয়েছি)
 
     @Override
     public void onBackPressed() {
