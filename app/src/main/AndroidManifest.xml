@@ -4,26 +4,24 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" /> <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
-    <uses-permission android:name="android.permission.WAKE_LOCK" /> <uses-permission android:name="android.permission.FOREGROUND_SERVICE" /> <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" /> <application
-        android:name=".SenseiApp"
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+
+    <application
         android:allowBackup="true"
         android:icon="@drawable/ic_launcher"
-        android:label="YouTube Lite"
+        android:label="YouTube Lite" 
         android:theme="@style/Theme.AppCompat.NoActionBar"
         android:hardwareAccelerated="true"
-        android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
         android:largeHeap="true">
 
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:launchMode="singleTask"
             android:configChanges="orientation|screenSize|smallestScreenSize|screenLayout|keyboardHidden|uiMode"
-            android:screenOrientation="sensor"
+            android:launchMode="singleTask"
             android:supportsPictureInPicture="true">
-            
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
@@ -33,8 +31,7 @@
         <service 
             android:name=".services.BackgroundAudioService"
             android:enabled="true"
-            android:exported="false"
-            android:foregroundServiceType="mediaPlayback" />
+            android:exported="false" />
             
     </application>
 </manifest>
