@@ -25,7 +25,6 @@ import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.RelativeLayout;
 import android.widget.Toast;
-import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -34,9 +33,6 @@ import com.jubair.youtube.managers.AdBlocker;
 import com.jubair.youtube.services.BackgroundAudioService;
 import com.jubair.youtube.utils.GoodTubeScript;
 import com.jubair.youtube.ui.DialogManager;
-
-import java.util.ArrayList;
-import java.util.List;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -47,16 +43,11 @@ public class MainActivity extends AppCompatActivity {
     private WebChromeClient.CustomViewCallback mCustomViewCallback;
     private AudioManager audioManager;
 
-    // JavaScript Interface
+    // JavaScript Bridge
     public class WebAppInterface {
         @JavascriptInterface
         public void onVideoPlay() {
-            // সার্ভিস স্টার্ট এবং অডিও ফোকাস
-            if (!BackgroundAudioService.isServiceRunning) {
-                startAudioService(true);
-            } else {
-                updateServiceState(true);
-            }
+            updateServiceState(true);
             requestAudioFocus();
         }
 
@@ -66,7 +57,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void startAudioService(boolean isPlaying) {
+    private void updateServiceState(boolean isPlaying) {
         Intent serviceIntent = new Intent(this, BackgroundAudioService.class);
         serviceIntent.putExtra("IS_PLAYING", isPlaying);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -76,13 +67,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void updateServiceState(boolean isPlaying) {
-        Intent serviceIntent = new Intent(this, BackgroundAudioService.class);
-        serviceIntent.putExtra("IS_PLAYING", isPlaying);
-        startService(serviceIntent);
-    }
-
-    // Media Control Receiver (বাটন ক্লিকের জন্য)
+    // মিডিয়া কন্ট্রোল রিসিভার
     private final BroadcastReceiver serviceReceiver = new BroadcastReceiver() {
         @Override
         public void onReceive(Context context, Intent intent) {
@@ -96,10 +81,10 @@ public class MainActivity extends AppCompatActivity {
                         myWebView.evaluateJavascript("document.querySelector('video').pause();", null);
                         break;
                     case "NEXT":
-                        myWebView.evaluateJavascript("if(document.querySelector('.ytp-next-button')) document.querySelector('.ytp-next-button').click();", null);
+                        myWebView.evaluateJavascript("document.querySelector('.ytp-next-button').click();", null);
                         break;
                     case "PREV":
-                        myWebView.evaluateJavascript("if(document.querySelector('.ytp-prev-button')) document.querySelector('.ytp-prev-button').click();", null);
+                        myWebView.evaluateJavascript("document.querySelector('.ytp-prev-button').click();", null);
                         break;
                 }
             }
@@ -111,11 +96,11 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         
-        // ১. পারমিশন চেক এবং রিকোয়েস্ট (Mic & Notification)
-        checkAndRequestPermissions();
+        // পারমিশন রিকোয়েস্ট
+        checkPermissions();
 
         audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
-
+        
         IntentFilter filter = new IntentFilter("MEDIA_CONTROL");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             registerReceiver(serviceReceiver, filter, Context.RECEIVER_NOT_EXPORTED);
@@ -137,21 +122,13 @@ public class MainActivity extends AppCompatActivity {
         btnRetry.setOnClickListener(v -> myWebView.reload());
     }
 
-    private void checkAndRequestPermissions() {
-        List<String> permissions = new ArrayList<>();
-        
+    private void checkPermissions() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                permissions.add(Manifest.permission.POST_NOTIFICATIONS);
+                ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.POST_NOTIFICATIONS, Manifest.permission.RECORD_AUDIO}, 101);
             }
-        }
-        
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            permissions.add(Manifest.permission.RECORD_AUDIO);
-        }
-
-        if (!permissions.isEmpty()) {
-            ActivityCompat.requestPermissions(this, permissions.toArray(new String[0]), 101);
+        } else {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, 101);
         }
     }
 
@@ -162,13 +139,13 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void initWebView() {
-        WebSettings settings = myWebView.getSettings();
-        settings.setJavaScriptEnabled(true);
-        settings.setDomStorageEnabled(true);
-        settings.setMediaPlaybackRequiresUserGesture(false);
-        
+        WebSettings s = myWebView.getSettings();
+        s.setJavaScriptEnabled(true);
+        s.setDomStorageEnabled(true);
+        s.setMediaPlaybackRequiresUserGesture(false);
+        s.setUserAgentString("Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/116.0.0.0 Mobile Safari/537.36");
+
         myWebView.addJavascriptInterface(new WebAppInterface(), "Android");
-        settings.setUserAgentString("Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Mobile Safari/537.36");
 
         myWebView.setWebViewClient(new WebViewClient() {
             @Override
@@ -180,51 +157,39 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 view.loadUrl(GoodTubeScript.getInjectScript());
-                super.onPageFinished(view, url);
-            }
-            
-            @Override
-            public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-                if (errorCode == -2) {
-                    myWebView.setVisibility(View.GONE);
-                    mOfflineLayout.setVisibility(View.VISIBLE);
-                }
+                // Unmute & Visibility Hack
+                view.loadUrl("javascript:(function(){ " +
+                    "Object.defineProperty(document, 'hidden', { value: false, writable: false }); " +
+                    "Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: false }); " +
+                    "setInterval(function(){ " +
+                    "  var v = document.querySelector('video'); if(v && v.muted) v.muted = false; " +
+                    "  var b = document.querySelector('.ytp-unmute'); if(b) b.click(); " +
+                    "}, 1000); " +
+                    "})()");
             }
         });
 
         myWebView.setWebChromeClient(new WebChromeClient() {
-            // ২. ভয়েস সার্চ পারমিশন হ্যান্ডলিং
             @Override
-            public void onPermissionRequest(PermissionRequest request) {
-                if (ContextCompat.checkSelfPermission(MainActivity.this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                    request.grant(request.getResources());
-                } else {
-                    // অ্যাপে পারমিশন না থাকলে আবার চাইবে
-                    ActivityCompat.requestPermissions(MainActivity.this, new String[]{Manifest.permission.RECORD_AUDIO}, 102);
-                }
-            }
+            public void onPermissionRequest(PermissionRequest request) { request.grant(request.getResources()); }
 
             @Override
             public void onShowCustomView(View view, CustomViewCallback callback) {
-                if (mCustomView != null) { callback.onCustomViewHidden(); return; }
                 mCustomView = view;
                 myWebView.setVisibility(View.GONE);
                 mFullscreenContainer.setVisibility(View.VISIBLE);
                 mFullscreenContainer.addView(view);
                 mCustomViewCallback = callback;
-                getWindow().addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
-                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+                setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
             }
 
             @Override
             public void onHideCustomView() {
-                if (mCustomView == null) return;
                 myWebView.setVisibility(View.VISIBLE);
                 mFullscreenContainer.setVisibility(View.GONE);
                 mFullscreenContainer.removeView(mCustomView);
                 mCustomView = null;
                 mCustomViewCallback.onCustomViewHidden();
-                getWindow().clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
                 setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT);
             }
         });
@@ -245,11 +210,11 @@ public class MainActivity extends AppCompatActivity {
     @Override
     public void onBackPressed() {
         if (mCustomView != null) {
-            WebChromeClient wcc = myWebView.getWebChromeClient();
-            if (wcc != null) wcc.onHideCustomView();
-            return;
+            myWebView.getWebChromeClient().onHideCustomView();
+        } else if (myWebView.canGoBack()) {
+            myWebView.goBack();
+        } else {
+            moveTaskToBack(true);
         }
-        if (myWebView.canGoBack()) myWebView.goBack();
-        else moveTaskToBack(true);
     }
 }
