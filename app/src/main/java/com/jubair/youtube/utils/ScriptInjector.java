@@ -3,58 +3,73 @@ package com.jubair.youtube.utils;
 public class ScriptInjector {
     public static String getInjectScript() {
         return "javascript:(function() {" +
-                // 1. CSS Injection (Native Look & Real PiP Fix)
+                // --- 1. JSON HIJACKING (The Core AdBlock) ---
+                // ইউটিউব প্লেয়ারের ডাটা মাঝপথে ধরে এড রিমুভ করা
+                "var originalJSONParse = JSON.parse;" +
+                "JSON.parse = function(text) {" +
+                "   var data = originalJSONParse(text);" +
+                "   if (data.adPlacements) { delete data.adPlacements; }" +
+                "   if (data.playerAds) { delete data.playerAds; }" +
+                "   if (data.adSlots) { delete data.adSlots; }" +
+                "   return data;" +
+                "};" +
+
+                // --- 2. XHR/FETCH INTERCEPTOR ---
+                // ব্যাকগ্রাউন্ড রিকোয়েস্ট থেকে এড ফিল্টার করা
+                "var originalOpen = XMLHttpRequest.prototype.open;" +
+                "XMLHttpRequest.prototype.open = function(method, url) {" +
+                "   if (url.indexOf('/ad_') > -1 || url.indexOf('doubleclick') > -1) {" +
+                "       // এড রিকোয়েস্ট হলে ফেক ইউআরএল এ পাঠাও" +
+                "       return originalOpen.apply(this, [method, 'https://localhost/block']);" +
+                "   }" +
+                "   return originalOpen.apply(this, arguments);" +
+                "};" +
+
+                // --- 3. HARDCORE CSS (UI Cleanup) ---
                 "var style = document.createElement('style');" +
                 "style.innerHTML = '" +
-                
-                // --- HARDCORE AD BLOCKING ---
+                // সব ধরণের এড এলিমেন্ট হাইড
                 ".ad-container, .ad-interrupting, .video-ads, .ytp-ad-overlay-container { display: none !important; }" +
                 ".ytm-promoted-sparkles-web-renderer, ytm-statement-banner-renderer { display: none !important; }" +
                 ".ytm-app-upsell, [aria-label=\"Open App\"] { display: none !important; }" +
-
-                // --- UI CLEANUP (Header/Footer Removal) ---
-                "ytm-mobile-topbar-renderer { display: none !important; }" +
-                ".mobile-topbar-header, #header-bar { display: none !important; }" +
-                "ytm-pivot-bar-renderer, .pivot-bar-renderer { display: none !important; }" +
-                "ytm-search { display: none !important; }" + // সার্চ বার হাইড
-
-                // --- REAL PiP FIX (Video Fullscreen Force) ---
-                // ভিডিও প্লেয়ারকে জোর করে পুরো স্ক্রিনে বসানো হচ্ছে
-                "body { background-color: #000000 !important; }" +
-                "#player-container-id { position: fixed !important; top: 0 !important; left: 0 !important; width: 100vw !important; height: 100vh !important; z-index: 99999 !important; background: #000 !important; }" +
-                ".player-container { height: 100% !important; }" +
-                "video { object-fit: contain !important; width: 100% !important; height: 100% !important; }" +
-                
-                // কন্টেন্ট নিচে নামিয়ে দেওয়া যাতে ভিডিওর নিচে থাকে
-                "ytm-browse, ytm-watch { padding-top: 0 !important; margin-top: 0 !important; }" +
+                // হেডার, ফুটার এবং সার্চ বার হাইড (ভিডিও মোডে)
+                "body.video-mode ytm-mobile-topbar-renderer { display: none !important; }" +
+                "body.video-mode .mobile-topbar-header { display: none !important; }" +
+                "body.video-mode ytm-pivot-bar-renderer { display: none !important; }" +
+                // ভিডিও প্লেয়ার ফিক্স
+                "body.video-mode #player-container-id { position: fixed !important; top: 0 !important; width: 100% !important; z-index: 99999 !important; background: #000 !important; }" +
                 "';" +
                 "document.head.appendChild(style);" +
 
-                // 2. JS Auto-Skip & Background Audio Keep-Alive
+                // --- 4. AUTO SKIPPER & VIDEO MODE DETECTOR ---
                 "setInterval(function(){" +
                 "   try {" +
+                "       // ভিডিও মোড ডিটেকশন (UI হাইড করার জন্য)" +
+                "       if (window.location.href.indexOf('/watch') > -1) {" +
+                "           document.body.classList.add('video-mode');" +
+                "       } else {" +
+                "           document.body.classList.remove('video-mode');" +
+                "       }" +
+
+                "       // যদি কোনো এড লিক হয়ে যায়, সেটা ১ সেকেন্ডের ১০০০ ভাগের ১ ভাগে স্কিপ করা" +
                 "       var skipBtn = document.querySelector('.ytp-ad-skip-button');" +
                 "       if(skipBtn) skipBtn.click();" +
                 "       var overlayClose = document.querySelector('.ytp-ad-overlay-close-button');" +
                 "       if(overlayClose) overlayClose.click();" +
                 "       " +
-                "       // ভিডিও যাতে পজ না হয় (ব্যাকগ্রাউন্ড প্লে হ্যাক)" +
+                "       // ভিডিও এড জোর করে ফাস্ট ফরোয়ার্ড করা" +
                 "       var video = document.querySelector('video');" +
-                "       if(video) {" +
-                "           video.setAttribute('playsinline', 'true');" +
-                "           if(video.paused && !document.hidden && video.currentTime > 0) video.play();" +
+                "       if(video && document.querySelector('.ad-interrupting')) {" +
+                "           video.currentTime = video.duration;" +
+                "           video.click();" +
+                "       }" +
                 
-                //          Media Session Update (Native Controls এর জন্য মেটাডেটা)
-                "           if ('mediaSession' in navigator) {" +
-                "               navigator.mediaSession.metadata = new MediaMetadata({" +
-                "                   title: document.title.replace(' - YouTube', '')," +
-                "                   artist: 'GoodTube Pro'," +
-                "                   artwork: [{ src: 'https://www.youtube.com/img/desktop/yt_1200.png', sizes: '512x512', type: 'image/png' }]" +
-                "               });" +
-                "           }" +
+                "       // ব্যাকগ্রাউন্ড প্লে হ্যাক" +
+                "       if(video && video.paused && !document.hidden && video.currentTime > 0) {" +
+                "            video.play();" +
                 "       }" +
                 "   } catch(e) {}" +
-                "}, 1000);" +
+                "}, 100);" + // প্রতি ১০০ms পর পর চেক করবে
                 "})()";
     }
 }
