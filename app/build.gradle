@@ -4,22 +4,40 @@ plugins {
 
 android {
     namespace 'com.jubair.youtube'
-    compileSdk 33
+    compileSdk 33 // এটা 33 ই থাকবে
 
     defaultConfig {
         applicationId "com.jubair.youtube"
-        minSdk 23 // Android 6.0 (Better permission handling)
+        minSdk 23
         targetSdk 33
-        versionCode 5
-        versionName "4.0-Sensei-Native"
+        versionCode 6
+        versionName "4.1-Stable"
+    }
+
+    signingConfigs {
+        release {
+            storeFile rootProject.file("my-release-key.jks") 
+            storePassword "123456"
+            keyAlias "my-key-alias"
+            keyPassword "123456"
+        }
     }
 
     buildTypes {
         release {
-            minifyEnabled true // কোড প্রোটেকশন অন
+            minifyEnabled true
             shrinkResources true
+            signingConfig signingConfigs.release
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
+        debug {
+            signingConfig signingConfigs.release
+        }
+    }
+    
+    lintOptions {
+        checkReleaseBuilds false
+        abortOnError false
     }
     
     compileOptions {
@@ -32,7 +50,9 @@ dependencies {
     implementation 'androidx.appcompat:appcompat:1.6.1'
     implementation 'com.google.android.material:material:1.9.0'
     implementation 'androidx.constraintlayout:constraintlayout:2.1.4'
-    implementation 'androidx.webkit:webkit:1.8.0' // লেটেস্ট ওয়েবকিট
+    
+    // ফিক্স: 1.8.0 এর বদলে 1.7.0 দেওয়া হলো যা SDK 33 সাপোর্ট করে
+    implementation 'androidx.webkit:webkit:1.7.0' 
+    
     implementation 'androidx.media:media:1.6.0'
 }
-
