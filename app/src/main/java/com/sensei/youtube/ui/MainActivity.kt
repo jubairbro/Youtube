@@ -69,8 +69,6 @@ class MainActivity : AppCompatActivity() {
     private fun setupWv() {
         val wv = bind.webview
         
-        WebSettingsCompat.forceDark(wv.settings, WebSettingsCompat.FORCE_DARK_ON)
-        
         wv.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
