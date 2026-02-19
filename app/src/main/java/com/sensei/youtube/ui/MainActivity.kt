@@ -44,6 +44,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var telegramDialogShown = false
+    private var isInBackground = false
+    private var wakeLock: PowerManager.WakeLock? = null
     
     private val MOBILE_USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
     private val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -63,12 +65,21 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
+        acquireWakeLock()
         setupWebView()
         setupNetworkCallback()
         setupBackPressedHandler()
         setupFab()
         checkAndShowTelegramDialog()
         requestBatteryOptimization()
+    }
+    
+    private fun acquireWakeLock() {
+        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+        wakeLock = powerManager.newWakeLock(
+            PowerManager.PARTIAL_WAKE_LOCK,
+            "YouTubeLite::VideoPlayback"
+        )
     }
     
     @SuppressLint("SetJavaScriptEnabled")
@@ -127,11 +138,12 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(view, url)
                 binding.progressBar.visibility = View.GONE
                 
+                injectBackgroundPlayScript()
+                
                 if (PreferenceManager.isAdBlockEnabled) {
                     injectAdBlockScript()
                 }
                 
-                injectBackgroundPlayScript()
                 WebAppInterface.injectJavaScript(binding.mainWebview)
             }
             
@@ -166,50 +178,166 @@ class MainActivity : AppCompatActivity() {
         binding.mainWebview.evaluateJavascript(AdBlocker.getAdBlockCss(), null)
     }
     
+    @SuppressLint("JavascriptInterface")
     private fun injectBackgroundPlayScript() {
         val js = """
             (function() {
-                if (window.BackgroundPlayInjected) return;
-                window.BackgroundPlayInjected = true;
+                'use strict';
                 
-                Object.defineProperty(document, 'hidden', {
-                    get: function() { return false; },
-                    configurable: true
-                });
+                if (window.__backgroundPlayInjected) {
+                    console.log('Background play already injected');
+                    return;
+                }
+                window.__backgroundPlayInjected = true;
                 
-                Object.defineProperty(document, 'visibilityState', {
-                    get: function() { return 'visible'; },
-                    configurable: true
-                });
+                console.log('Injecting background play script...');
                 
-                document.addEventListener('visibilitychange', function(e) {
+                // Override document.hidden property
+                try {
+                    Object.defineProperty(document, 'hidden', {
+                        get: function() { return false; },
+                        configurable: true,
+                        enumerable: true
+                    });
+                } catch(e) { console.log('hidden override failed', e); }
+                
+                // Override document.visibilityState property  
+                try {
+                    Object.defineProperty(document, 'visibilityState', {
+                        get: function() { return 'visible'; },
+                        configurable: true,
+                        enumerable: true
+                    });
+                } catch(e) { console.log('visibilityState override failed', e); }
+                
+                // Override document.webkitHidden
+                try {
+                    Object.defineProperty(document, 'webkitHidden', {
+                        get: function() { return false; },
+                        configurable: true,
+                        enumerable: true
+                    });
+                } catch(e) { console.log('webkitHidden override failed', e); }
+                
+                // Override document.webkitVisibilityState
+                try {
+                    Object.defineProperty(document, 'webkitVisibilityState', {
+                        get: function() { return 'visible'; },
+                        configurable: true,
+                        enumerable: true
+                    });
+                } catch(e) { console.log('webkitVisibilityState override failed', e); }
+                
+                // Stop visibility change events from propagating
+                var stopVisibilityEvents = function(e) {
                     e.stopImmediatePropagation();
-                }, true);
+                    e.preventDefault();
+                    return false;
+                };
                 
-                document.addEventListener('webkitvisibilitychange', function(e) {
-                    e.stopImmediatePropagation();
-                }, true);
+                document.addEventListener('visibilitychange', stopVisibilityEvents, true);
+                document.addEventListener('webkitvisibilitychange', stopVisibilityEvents, true);
+                document.addEventListener('mozvisibilitychange', stopVisibilityEvents, true);
+                document.addEventListener('msvisibilitychange', stopVisibilityEvents, true);
                 
-                var originalAddEventListener = document.addEventListener;
-                document.addEventListener = function(type, listener, options) {
-                    if (type === 'visibilitychange' || type === 'webkitvisibilitychange') {
+                // Also stop on window
+                window.addEventListener('visibilitychange', stopVisibilityEvents, true);
+                window.addEventListener('webkitvisibilitychange', stopVisibilityEvents, true);
+                window.addEventListener('blur', stopVisibilityEvents, true);
+                window.addEventListener('focusout', stopVisibilityEvents, true);
+                
+                // Override addEventListener to filter visibility events
+                var originalAddEventListener = EventTarget.prototype.addEventListener;
+                EventTarget.prototype.addEventListener = function(type, listener, options) {
+                    if (type === 'visibilitychange' || type === 'webkitvisibilitychange' || 
+                        type === 'mozvisibilitychange' || type === 'msvisibilitychange') {
+                        console.log('Blocked visibility listener:', type);
                         return;
                     }
                     return originalAddEventListener.call(this, type, listener, options);
                 };
                 
+                // Override pagehide and pageshow events
+                window.addEventListener('pagehide', function(e) {
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+                }, true);
+                
+                window.addEventListener('freeze', function(e) {
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+                }, true);
+                
+                // Keep video playing function
+                window.__keepVideoPlaying = function() {
+                    var videos = document.querySelectorAll('video');
+                    videos.forEach(function(video) {
+                        if (video.paused && video.currentTime > 0 && !video.ended) {
+                            var playPromise = video.play();
+                            if (playPromise !== undefined) {
+                                playPromise.catch(function(error) {
+                                    console.log('Video play failed:', error);
+                                });
+                            }
+                        }
+                        
+                        // Remove pause event listeners that might be added by YouTube
+                        video.onpause = null;
+                        video.removeAttribute('onpause');
+                    });
+                };
+                
+                // Run keep alive every 500ms
+                setInterval(window.__keepVideoPlaying, 500);
+                
+                // Also run when page visibility would normally change
                 setInterval(function() {
-                    var video = document.querySelector('video.html5-main-video') || 
-                               document.querySelector('video') ||
-                               document.getElementsByTagName('video')[0];
-                    if (video && !video.paused) {
-                        video.play().catch(function() {});
-                    }
+                    window.__keepVideoPlaying();
+                    
+                    // Dispatch fake visibility events
+                    var visibleEvent = new Event('visibilitychange', { bubbles: false });
+                    Object.defineProperty(visibleEvent, 'target', { value: document, enumerable: true });
                 }, 1000);
+                
+                // Override HTMLVideoElement.pause to prevent unwanted pauses
+                var originalPause = HTMLVideoElement.prototype.pause;
+                HTMLVideoElement.prototype.pause = function() {
+                    // Only allow pause if video is at end or user explicitly requested
+                    if (this.ended || this.__userPaused) {
+                        return originalPause.call(this);
+                    }
+                    console.log('Blocked automatic pause');
+                    return;
+                };
+                
+                // Track user-initiated pauses
+                document.addEventListener('keydown', function(e) {
+                    if (e.code === 'Space' || e.code === 'MediaPlayPause') {
+                        var videos = document.querySelectorAll('video');
+                        videos.forEach(function(v) {
+                            v.__userPaused = !v.paused;
+                        });
+                    }
+                });
+                
+                document.addEventListener('click', function(e) {
+                    var target = e.target;
+                    if (target.closest('.ytp-play-button') || target.closest('.ytp-button[aria-label*="Play"]') || 
+                        target.closest('.ytp-button[aria-label*="Pause"]')) {
+                        var videos = document.querySelectorAll('video');
+                        videos.forEach(function(v) {
+                            v.__userPaused = !v.paused;
+                        });
+                    }
+                });
+                
+                console.log('Background play script injected successfully!');
             })();
         """.trimIndent()
         
-        binding.mainWebview.evaluateJavascript(js, null)
+        binding.mainWebview.evaluateJavascript(js) { result ->
+            Log.d(TAG, "Background play script result: $result")
+        }
     }
     
     private fun setupNetworkCallback() {
@@ -283,7 +411,7 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun enterPictureInPicture() {
+    private fun enterPictureInPicture(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
                 try {
@@ -296,22 +424,66 @@ class MainActivity : AppCompatActivity() {
                         }
                         .build()
                     
-                    enterPictureInPictureMode(params)
+                    return enterPictureInPictureMode(params)
                 } catch (e: Exception) {
                     Log.e(TAG, "PiP error", e)
                 }
             }
         }
+        return false
     }
     
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
+        if (PreferenceManager.isBackgroundPlayEnabled && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            enterPictureInPicture()
+            startBackgroundPlayback()
+        }
+    }
+    
+    private fun startBackgroundPlayback() {
+        isInBackground = true
+        
+        // Acquire wake lock
+        wakeLock?.acquire(30 * 60 * 1000L) // 30 minutes
+        
+        // Start foreground service
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            if (PreferenceManager.isBackgroundPlayEnabled) {
-                enterPictureInPicture()
-                startBackgroundService()
+            startForegroundService(Intent(this, NotificationService::class.java))
+        } else {
+            startService(Intent(this, NotificationService::class.java))
+        }
+        
+        // Keep WebView active
+        binding.mainWebview.settings.mediaPlaybackRequiresUserGesture = false
+        
+        // Re-inject background play script
+        injectBackgroundPlayScript()
+        
+        // Force video to keep playing
+        binding.mainWebview.evaluateJavascript(
+            """
+            (function() {
+                var videos = document.querySelectorAll('video');
+                videos.forEach(function(v) {
+                    v.play().catch(function(){});
+                });
+            })();
+            """,
+            null
+        )
+    }
+    
+    private fun stopBackgroundPlayback() {
+        isInBackground = false
+        
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
             }
         }
+        
+        stopService(Intent(this, NotificationService::class.java))
     }
     
     override fun onPictureInPictureModeChanged(
@@ -327,21 +499,20 @@ class MainActivity : AppCompatActivity() {
                 WindowManager.LayoutParams.FLAG_FULLSCREEN,
                 WindowManager.LayoutParams.FLAG_FULLSCREEN
             )
+            
+            // Ensure video keeps playing
+            binding.mainWebview.evaluateJavascript(
+                """
+                (function() {
+                    var video = document.querySelector('video');
+                    if (video) video.play();
+                })();
+                """,
+                null
+            )
         } else {
             window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         }
-    }
-    
-    private fun startBackgroundService() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(Intent(this, NotificationService::class.java))
-        } else {
-            startService(Intent(this, NotificationService::class.java))
-        }
-    }
-    
-    private fun stopBackgroundService() {
-        stopService(Intent(this, NotificationService::class.java))
     }
     
     private fun checkAndShowTelegramDialog() {
@@ -442,20 +613,49 @@ class MainActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         binding.mainWebview.onResume()
+        
+        // Re-inject background play script
+        injectBackgroundPlayScript()
+        
+        // Resume video playback
         binding.mainWebview.evaluateJavascript(
-            "if(document.querySelector('video')) document.querySelector('video').play();",
+            """
+            (function() {
+                var videos = document.querySelectorAll('video');
+                videos.forEach(function(v) {
+                    if (!v.ended && v.currentTime > 0) {
+                        v.play().catch(function(){});
+                    }
+                });
+            })();
+            """,
             null
         )
     }
     
     override fun onPause() {
         super.onPause()
+        
         if (PreferenceManager.isBackgroundPlayEnabled) {
+            // DON'T call webView.onPause() - this pauses the video
+            // Instead, start background playback
+            startBackgroundPlayback()
+            
+            // Force keep playing
             binding.mainWebview.evaluateJavascript(
-                "if(document.querySelector('video')) document.querySelector('video').play();",
+                """
+                (function() {
+                    window.__keepVideoPlaying && window.__keepVideoPlaying();
+                    var videos = document.querySelectorAll('video');
+                    videos.forEach(function(v) {
+                        if (!v.ended) {
+                            v.play().catch(function(){});
+                        }
+                    });
+                })();
+                """,
                 null
             )
-            startBackgroundService()
         } else {
             binding.mainWebview.onPause()
         }
@@ -467,7 +667,14 @@ class MainActivity : AppCompatActivity() {
             connectivityManager.unregisterNetworkCallback(it)
         }
         
-        stopBackgroundService()
+        stopBackgroundPlayback()
+        
+        wakeLock?.let {
+            if (it.isHeld) {
+                it.release()
+            }
+        }
+        
         super.onDestroy()
     }
     
