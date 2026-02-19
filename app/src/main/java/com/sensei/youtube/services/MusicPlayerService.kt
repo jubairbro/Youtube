@@ -7,14 +7,12 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Binder
 import android.os.Build
 import android.os.IBinder
 import android.os.PowerManager
-import android.support.v4.media.session.MediaSessionCompat
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -32,6 +30,7 @@ class MusicPlayerService : Service() {
     private var wakeLock: PowerManager.WakeLock? = null
     
     companion object {
+        private const val TAG = "MusicPlayerService"
         const val CHANNEL_ID = "youtube_lite_playback"
         const val NOTIFICATION_ID = 1001
         
@@ -49,9 +48,7 @@ class MusicPlayerService : Service() {
         
         private var instance: MusicPlayerService? = null
         
-        fun isPlaying(): Boolean {
-            return instance?.player?.isPlaying ?: false
-        }
+        fun isPlaying(): Boolean = instance?.player?.isPlaying ?: false
         
         fun play(context: Context) {
             instance?.player?.play()
@@ -80,7 +77,7 @@ class MusicPlayerService : Service() {
                     context.startService(intent)
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Log.e(TAG, "Failed to start service", e)
             }
         }
     }
@@ -117,79 +114,78 @@ class MusicPlayerService : Service() {
     }
     
     private fun setupNotificationManager() {
+        val descriptionAdapter = object : PlayerNotificationManager.MediaDescriptionAdapter {
+            override fun getCurrentContentTitle(player: Player): CharSequence {
+                return currentVideoTitle ?: "YouTube Lite"
+            }
+            
+            override fun createCurrentContentIntent(player: Player): PendingIntent? {
+                val intent = Intent(this@MusicPlayerService, MainActivity::class.java)
+                return PendingIntent.getActivity(
+                    this@MusicPlayerService,
+                    0,
+                    intent,
+                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+                )
+            }
+            
+            override fun getCurrentContentText(player: Player): CharSequence? {
+                return currentVideoAuthor ?: "Playing"
+            }
+            
+            override fun getCurrentLargeIcon(
+                player: Player,
+                callback: PlayerNotificationManager.BitmapCallback
+            ): android.graphics.Bitmap? = null
+        }
+        
+        val notificationListener = object : PlayerNotificationManager.NotificationListener {
+            override fun onNotificationPosted(
+                notificationId: Int,
+                notification: Notification,
+                ongoing: Boolean
+            ) {
+                if (ongoing) {
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            startForeground(
+                                notificationId,
+                                notification,
+                                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+                            )
+                        } else {
+                            startForeground(notificationId, notification)
+                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to start foreground", e)
+                    }
+                }
+            }
+            
+            override fun onNotificationCancelled(notificationId: Int, dismissedByUser: Boolean) {
+                stopSelf()
+            }
+        }
+        
         playerNotificationManager = PlayerNotificationManager.Builder(
             this,
             NOTIFICATION_ID,
             CHANNEL_ID
-        ).apply {
-            setMediaDescriptionAdapter(object : PlayerNotificationManager.MediaDescriptionAdapter {
-                override fun getCurrentContentTitle(player: Player): CharSequence {
-                    return currentVideoTitle ?: "YouTube Lite"
-                }
-                
-                override fun createCurrentContentIntent(player: Player): PendingIntent? {
-                    val intent = Intent(this@MusicPlayerService, MainActivity::class.java)
-                    return PendingIntent.getActivity(
-                        this@MusicPlayerService,
-                        0,
-                        intent,
-                        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                    )
-                }
-                
-                override fun getCurrentContentText(player: Player): CharSequence? {
-                    return currentVideoAuthor ?: "Playing"
-                }
-                
-                override fun getCurrentLargeIcon(
-                    player: Player,
-                    callback: PlayerNotificationManager.BitmapCallback
-                ): Bitmap? {
-                    return null
-                }
-            })
-            
-            setNotificationListener(object : PlayerNotificationManager.NotificationListener {
-                override fun onNotificationPosted(
-                    notificationId: Int,
-                    notification: Notification,
-                    ongoing: Boolean
-                ) {
-                    if (ongoing) {
-                        try {
-                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                startForeground(
-                                    notificationId,
-                                    notification,
-                                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                                )
-                            } else {
-                                startForeground(notificationId, notification)
-                            }
-                        } catch (e: Exception) {
-                            e.printStackTrace()
-                        }
-                    }
-                }
-                
-                override fun onNotificationCancelled(notificationId: Int, dismissedByUser: Boolean) {
-                    stopSelf()
-                }
-            })
-        }.build()
-        
-        playerNotificationManager?.setPlayer(player)
-        playerNotificationManager?.setMediaSessionToken(mediaSession?.sessionCompatToken!!)
+        )
+            .setMediaDescriptionAdapter(descriptionAdapter)
+            .setNotificationListener(notificationListener)
+            .build()
+            .also {
+                it.setPlayer(player)
+                it.setMediaSessionToken(mediaSession!!.sessionCompatToken)
+                it.setSmallIcon(R.drawable.ic_notification)
+            }
     }
     
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
-            ACTION_PLAY -> {
-                player?.play()
-            }
-            ACTION_PAUSE -> {
-                player?.pause()
-            }
+            ACTION_PLAY -> player?.play()
+            ACTION_PAUSE -> player?.pause()
             ACTION_STOP -> {
                 player?.stop()
                 stopForeground(STOP_FOREGROUND_REMOVE)
@@ -221,7 +217,7 @@ class MusicPlayerService : Service() {
             player?.prepare()
             player?.playWhenReady = true
         } catch (e: Exception) {
-            e.printStackTrace()
+            Log.e(TAG, "Failed to play video", e)
         }
     }
     
@@ -231,9 +227,7 @@ class MusicPlayerService : Service() {
         mediaSession?.release()
         
         wakeLock?.let {
-            if (it.isHeld) {
-                it.release()
-            }
+            if (it.isHeld) it.release()
         }
         
         instance = null
