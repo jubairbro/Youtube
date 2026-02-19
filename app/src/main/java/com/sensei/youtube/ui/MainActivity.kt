@@ -306,39 +306,42 @@ class MainActivity : AppCompatActivity() {
         isAudioMode = !isAudioMode
         
         if (isAudioMode) {
-            // Extract and play audio
-            Toast.makeText(this, "🎵 Audio Mode Activated", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "🎵 Audio Mode - Playing in background", Toast.LENGTH_SHORT).show()
+            showAudioPanel()
             
-            // Get current video info and play
+            // Trigger video to send URL to ExoPlayer
             bind.webview.evaluateJavascript("""
                 (function(){
                     var v=document.querySelector('video');
                     if(v){
+                        // Force play to trigger callback
                         v.play();
-                        window.Android && Android.onAudioMode(true);
                     }
                 })();
             """.trimIndent(), null)
-            
-            showAudioPanel()
         } else {
             hideAudioPanel()
+            AudioService.stop(this)
         }
     }
     
     private fun showAudioPanel() {
         bind.audioPanel.visibility = View.VISIBLE
-        bind.audioTitle.text = AudioService.title
+        bind.audioTitle.text = AudioService.title.ifEmpty { "Loading..." }
         bind.audioChannel.text = AudioService.author
         bind.btnAudioPause.setImageResource(
             if (AudioService.isPlaying()) R.drawable.ic_pause else R.drawable.ic_play
         )
         
-        // Hide video if in audio mode
+        // Hide video visual (keep audio)
         bind.webview.evaluateJavascript("""
             (function(){
                 var v=document.querySelector('video');
-                if(v)v.style.opacity='0';
+                if(v){
+                    v.style.visibility='hidden';
+                    v.style.position='fixed';
+                    v.style.top='-9999px';
+                }
             })();
         """.trimIndent(), null)
     }
@@ -347,11 +350,15 @@ class MainActivity : AppCompatActivity() {
         isAudioMode = false
         bind.audioPanel.visibility = View.GONE
         
-        // Show video again
+        // Restore video
         bind.webview.evaluateJavascript("""
             (function(){
                 var v=document.querySelector('video');
-                if(v)v.style.opacity='1';
+                if(v){
+                    v.style.visibility='visible';
+                    v.style.position='';
+                    v.style.top='';
+                }
             })();
         """.trimIndent(), null)
     }

@@ -1,129 +1,145 @@
-# YouTube Lite
+# 🎬 YouTube Lite
 
 <div align="center">
-  <img src="app/src/main/res/drawable/ic_logo.xml" width="120" height="120" alt="YouTube Lite Logo">
+  
+  ![YouTube Lite](https://img.shields.io/badge/YouTube-Lite-red?style=for-the-badge&logo=youtube&logoColor=white)
   
   **A powerful, lightweight YouTube client for Android**
   
   [![Build](https://github.com/jubairbro/youtube/actions/workflows/build.yml/badge.svg)](https://github.com/jubairbro/youtube/actions/workflows/build.yml)
-  [![Download](https://img.shields.io/github/v/release/jubairbro/youtube?color=red&label=Download)](https://github.com/jubairbro/youtube/releases/latest)
-  [![License](https://img.shields.io/badge/License-MIT-red.svg)](LICENSE)
-  [![Telegram](https://img.shields.io/badge/Telegram-JubairSensei-blue.svg)](https://t.me/JubairSensei)
+  [![Download](https://img.shields.io/github/v/release/jubairbro/youtube?color=red&label=Download&style=flat-square)](https://github.com/jubairbro/youtube/releases/latest)
+  [![Telegram](https://img.shields.io/badge/Telegram-JubairSensei-blue?style=flat-square)](https://t.me/JubairSensei)
+  
 </div>
+
+---
+
+## 📥 Download
+
+**Latest Release:** [v1.0.28](https://github.com/jubairbro/youtube/releases/tag/v1.0.28)
+
+| APK | Size | Description |
+|-----|------|-------------|
+| [Debug](https://github.com/jubairbro/youtube/releases/latest) | ~12MB | For testing |
+| [Release](https://github.com/jubairbro/youtube/releases/latest) | ~8MB | Production |
 
 ---
 
 ## ✨ Features
 
 ### 🎵 Background Playback
-- Continue playing audio when screen is off
-- Works with PiP mode
+- Play audio when screen is off
 - Notification controls (Play/Pause/Stop)
-- ExoPlayer-powered native audio extraction
+- Works with other apps
+
+### 🎧 Audio-Only Mode
+- Tap the **headphones button** to hide video
+- Control panel shows current playing info
+- Saves battery and data
 
 ### 📺 Picture-in-Picture (PiP)
-- Auto-enters PiP when you press Home
-- Floating video window over other apps
-- 16:9 aspect ratio support
+- Press **Home** button to activate
+- Video floats over other apps
+- 16:9 aspect ratio
 
 ### 🚫 Ad Blocking
-- CSS injection removes ad elements
-- Network-level ad domain blocking
-- Images always load correctly
+- Blocks video ads
+- Blocks banner ads
+- Saves bandwidth
 
 ### 🔐 Google Login
-- Persistent login with CookieManager
-- DomStorage enabled
-- Access your subscriptions
-
-### 🎨 Modern UI
-- Material Design 3
-- Dark theme
-- Clean splash screen
-- Smooth animations
+- Sign in with Google account
+- Access subscriptions
+- Persistent login
 
 ---
 
-## 📥 Download
+## 🎮 How to Use
 
-| Version | APK | Size |
-|---------|-----|------|
-| Latest | [Download](https://github.com/jubairbro/youtube/releases/latest) | ~8MB |
+### Background Play
+1. Play any video
+2. Press Home button
+3. Audio continues playing
+4. Control from notification
+
+### Audio-Only Mode
+1. Play a video
+2. Tap the **🎧 headphones button** (bottom right)
+3. Video hides, audio plays
+4. Use control panel to pause/stop
+
+### Picture-in-Picture
+1. Play a video
+2. Tap **PiP button** or press Home
+3. Video floats in small window
+4. Resize and move anywhere
 
 ---
 
-## 📱 Screenshots
+## 📱 Requirements
 
-<div align="center">
-  <img src="https://via.placeholder.com/270x480/000000/FF0000?text=Home" width="240" alt="Home">
-  <img src="https://via.placeholder.com/270x480/000000/FF0000?text=Settings" width="240" alt="Settings">
-  <img src="https://via.placeholder.com/270x480/000000/FF0000?text=PiP" width="240" alt="PiP">
-</div>
+- Android 7.0+ (API 24)
+- Internet connection
+
+---
+
+## 🔨 Build from Source
+
+```bash
+# Clone
+git clone https://github.com/jubairbro/youtube.git
+cd youtube
+
+# Build Debug
+./gradlew assembleDebug
+
+# Build Release
+./gradlew assembleRelease
+```
+
+APK will be in `app/build/outputs/apk/`
+
+---
+
+## ⚙️ Settings
+
+| Setting | Description |
+|---------|-------------|
+| Background Play | Enable/disable background audio |
+| Ad Blocking | Enable/disable ad blocking |
+| Desktop Mode | Use desktop YouTube layout |
+| Hard Reload | Clear cache and reload |
+| Clear Cache | Remove all cached data |
 
 ---
 
 ## 🛠️ Tech Stack
 
-- **Language:** Kotlin
-- **UI:** Material Design 3, ViewBinding
-- **Media:** Media3 ExoPlayer
-- **Network:** OkHttp
-- **WebView:** androidx.webkit
+| Technology | Purpose |
+|------------|---------|
+| Kotlin | Programming language |
+| WebView | YouTube interface |
+| ExoPlayer | Audio playback |
+| Material Design 3 | UI components |
 
 ---
 
-## 🔨 Build
+## 📞 Support
 
-```bash
-# Clone the repository
-git clone https://github.com/jubairbro/youtube.git
-cd youtube
-
-# Build debug APK
-./gradlew assembleDebug
-
-# Build release APK
-./gradlew assembleRelease
-```
-
----
-
-## ⚙️ Requirements
-
-- Android 7.0+ (API 24)
-- Internet connection
-- Optional: Notification permission for background playback
-
----
-
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
-
----
-
-## 📜 License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- **Telegram:** [@JubairSensei](https://t.me/JubairSensei)
+- **Issues:** [GitHub Issues](https://github.com/jubairbro/youtube/issues)
 
 ---
 
 ## ⚠️ Disclaimer
 
-This app is for educational purposes only. It is not affiliated with YouTube or Google. Use at your own risk.
+This app is for educational purposes. Not affiliated with YouTube or Google.
 
 ---
 
-## 📞 Contact
+## 📜 License
 
-- **Telegram:** [@JubairSensei](https://t.me/JubairSensei)
-- **GitHub:** [@jubairbro](https://github.com/jubairbro)
+MIT License - See [LICENSE](LICENSE)
 
 ---
 
