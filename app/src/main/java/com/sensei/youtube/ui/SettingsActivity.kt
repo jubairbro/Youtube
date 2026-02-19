@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.sensei.youtube.BuildConfig
 import com.sensei.youtube.R
 import com.sensei.youtube.databinding.ActivitySettingsBinding
 import com.sensei.youtube.utils.PreferenceManager
@@ -46,42 +45,25 @@ class SettingsActivity : AppCompatActivity() {
         
         binding.switchDesktopMode.setOnCheckedChangeListener { _, isChecked ->
             PreferenceManager.isDesktopMode = isChecked
-            (getMainActivity())?.toggleDesktopMode(isChecked)
         }
     }
     
     private fun setupButtons() {
         binding.btnHardReload.setOnClickListener {
-            (getMainActivity())?.hardReload()
             Toast.makeText(this, "Reloading...", Toast.LENGTH_SHORT).show()
         }
         
         binding.btnClearCache.setOnClickListener {
-            (getMainActivity())?.clearAllCache()
             Toast.makeText(this, "Cache cleared", Toast.LENGTH_SHORT).show()
         }
     }
     
     private fun setupVersion() {
-        binding.txtVersion.text = "Version ${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
-    }
-    
-    private fun getMainActivity(): MainActivity? {
-        return try {
-            (application as? com.sensei.youtube.YouTubeLiteApp)
-                ?.let { null }
-        } catch (e: Exception) {
-            null
-        }
-    }
-    
-    private fun openTelegram() {
         try {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=JubairSensei"))
-            startActivity(intent)
+            val pm = packageManager.getPackageInfo(packageName, 0)
+            binding.txtVersion.text = "Version ${pm.versionName} (${if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) pm.longVersionCode else pm.versionCode})"
         } catch (e: Exception) {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/JubairSensei"))
-            startActivity(intent)
+            binding.txtVersion.text = "Version 1.0.0"
         }
     }
 }

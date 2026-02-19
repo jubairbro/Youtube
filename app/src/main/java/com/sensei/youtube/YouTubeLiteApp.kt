@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import android.os.Build
+import com.sensei.youtube.services.NotificationService
 import com.sensei.youtube.utils.AdBlocker
 import com.sensei.youtube.utils.PreferenceManager
 
