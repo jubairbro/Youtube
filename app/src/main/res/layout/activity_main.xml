@@ -1,59 +1,81 @@
 <?xml version="1.0" encoding="utf-8"?>
-<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/main_container"
+<androidx.coordinatorlayout.widget.CoordinatorLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#000000">
-
-    <WebView
-        android:id="@+id/main_webview"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"/>
-
-    <RelativeLayout
-        android:id="@+id/offline_layout"
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:background="#000000"
-        android:visibility="gone"
-        android:gravity="center">
-
-        <ImageView
-            android:id="@+id/img_no_net"
-            android:layout_width="80dp"
-            android:layout_height="80dp"
-            android:src="@drawable/ic_launcher"
-            android:tint="#555555"
-            android:layout_centerHorizontal="true"
-            android:layout_marginBottom="20dp"/>
-
-        <TextView
-            android:id="@+id/txt_offline"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="No Internet Connection"
-            android:textColor="#AAAAAA"
-            android:textSize="18sp"
-            android:layout_below="@id/img_no_net"
-            android:layout_centerHorizontal="true"/>
-
-        <Button
-            android:id="@+id/btn_retry"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="30dp"
-            android:text="RETRY"
-            android:backgroundTint="#333333"
-            android:textColor="#FFFFFF"
-            android:layout_below="@id/txt_offline"
-            android:layout_centerHorizontal="true"/>
-    </RelativeLayout>
+    android:background="#000000"
+    android:fitsSystemWindows="true">
 
     <FrameLayout
-        android:id="@+id/fullscreen_container"
+        android:id="@+id/main_container"
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:visibility="gone"
-        android:background="#000000" />
+        android:layout_height="match_parent">
 
-</FrameLayout>
+        <WebView
+            android:id="@+id/main_webview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:layout_gravity="center"
+            android:indeterminateTint="#FF0000"
+            android:visibility="gone"/>
+
+        <RelativeLayout
+            android:id="@+id/offline_layout"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#000000"
+            android:visibility="gone"
+            android:gravity="center">
+
+            <ImageView
+                android:id="@+id/img_no_net"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:src="@drawable/ic_wifi_off"
+                android:layout_centerHorizontal="true"
+                android:layout_marginBottom="20dp"/>
+
+            <TextView
+                android:id="@+id/txt_offline"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="No Internet Connection"
+                android:textColor="#AAAAAA"
+                android:textSize="18sp"
+                android:layout_below="@id/img_no_net"
+                android:layout_centerHorizontal="true"/>
+
+            <Button
+                android:id="@+id/btn_retry"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="30dp"
+                android:text="RETRY"
+                android:backgroundTint="#FF0000"
+                android:textColor="#FFFFFF"
+                android:layout_below="@id/txt_offline"
+                android:layout_centerHorizontal="true"/>
+
+        </RelativeLayout>
+
+    </FrameLayout>
+
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fab_pip"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom|end"
+        android:layout_margin="16dp"
+        android:src="@drawable/ic_pip"
+        android:contentDescription="PiP Mode"
+        app:backgroundTint="#FF0000"
+        app:tint="#FFFFFF"/>
+
+</androidx.coordinatorlayout.widget.CoordinatorLayout>

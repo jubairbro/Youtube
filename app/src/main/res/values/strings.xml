@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">YouTube Lite</string>
+    <string name="settings">Settings</string>
+    <string name="desktop_mode">Desktop Mode</string>
+    <string name="hard_reload">Hard Reload</string>
+    <string name="clear_cache">Clear Cache</string>
+    <string name="background_play">Background Play</string>
+    <string name="pip_mode">Picture-in-Picture</string>
+    <string name="ad_blocking">Ad Blocking</string>
+    <string name="login_safe">Login Safe</string>
+    <string name="save_data">Save Data</string>
+    <string name="next">Next</string>
+    <string name="skip">Skip</string>
+    <string name="get_started">Get Started</string>
+    <string name="join_telegram">Join Telegram</string>
+    <string name="later">Later</string>
+    <string name="telegram_dialog_title">Join Official Channel</string>
+    <string name="telegram_dialog_message">Stay updated with latest features and updates!\n\nt.me/JubairSensei</string>
+    <string name="notification_channel_name">Media Playback</string>
+    <string name="notification_channel_desc">Background playback controls</string>
+    <string name="playing">Playing</string>
+    <string name="paused">Paused</string>
+    <string name="intro_title_1">Background Play</string>
+    <string name="intro_desc_1">Continue listening even when screen is off or using other apps</string>
+    <string name="intro_title_2">Login Safe</string>
+    <string name="intro_desc_2">Your Google account stays secure with encrypted cookie storage</string>
+    <string name="intro_title_3">Save Data</string>
+    <string name="intro_desc_3">Ad blocking and optimized streaming saves your bandwidth</string>
+</resources>
