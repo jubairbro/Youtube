@@ -5,12 +5,13 @@
     android:viewportWidth="100"
     android:viewportHeight="100">
 
-    <path
-        android:fillColor="#4CAF50"
-        android:pathData="M50,5C25.1,5 5,25.1 5,50s20.1,45 45,45s45,-20.1 45,-45S74.9,5 50,5z"/>
-
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M45,25L45,55L30,55L50,75L70,55L55,55L55,25Z"/>
-
+    <!-- Background -->
+    <path android:fillColor="#1A1A1A" android:pathData="M50,5C25.2,5 5,25.2 5,50s20.2,45 45,45s45,-20.2 45,-45S74.8,5 50,5z"/>
+    
+    <!-- Shield -->
+    <path android:fillColor="#4CAF50" android:pathData="M50,15L25,25L25,50C25,68 50,82 50,82S75,68 75,50L75,25L50,15z"/>
+    
+    <!-- Checkmark -->
+    <path android:fillColor="#FFFFFF" android:pathData="M45,50L38,43L34,47L45,58L67,36L63,32Z"/>
+    
 </vector>

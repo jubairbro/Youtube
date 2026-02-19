@@ -1,6 +1,5 @@
 package com.sensei.youtube.ui
 
-import android.annotation.SuppressLint
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
@@ -13,8 +12,6 @@ import android.net.NetworkRequest
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.PowerManager
-import android.provider.Settings
 import android.util.Log
 import android.util.Rational
 import android.view.View
@@ -29,17 +26,14 @@ import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.sensei.youtube.R
 import com.sensei.youtube.databinding.ActivityMainBinding
 import com.sensei.youtube.databinding.DialogTelegramBinding
-import com.sensei.youtube.services.MusicPlayerService
 import com.sensei.youtube.utils.AdBlocker
 import com.sensei.youtube.utils.PreferenceManager
-import com.sensei.youtube.utils.WebAppInterface
 
 class MainActivity : AppCompatActivity() {
     
@@ -48,15 +42,15 @@ class MainActivity : AppCompatActivity() {
     private var telegramDialogShown = false
     private var customViewContainer: FrameLayout? = null
     private var customViewCallback: WebChromeClient.CustomViewCallback? = null
-    private var wakeLock: PowerManager.WakeLock? = null
-    
-    private val MOBILE_USER_AGENT = "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-    private val DESKTOP_USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    private var isFullscreen = false
     
     companion object {
         private const val TAG = "MainActivity"
         private const val YOUTUBE_URL = "https://m.youtube.com"
         private const val YOUTUBE_DESKTOP_URL = "https://www.youtube.com"
+        
+        private const val MOBILE_UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
     
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,39 +58,14 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
         
-        setupWakeLock()
         setupWebView()
         setupNetworkCallback()
         setupBackPressedHandler()
         setupFab()
         checkAndShowTelegramDialog()
-        requestBatteryOptimization()
-        
-        startMusicService()
     }
     
-    private fun setupWakeLock() {
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "YouTubeLite::Playback"
-        )
-    }
-    
-    private fun startMusicService() {
-        val intent = Intent(this, MusicPlayerService::class.java)
-        try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                startForegroundService(intent)
-            } else {
-                startService(intent)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to start music service", e)
-        }
-    }
-    
-    @SuppressLint("SetJavaScriptEnabled")
+    @Suppress("DEPRECATION", "SetJavaScriptEnabled")
     private fun setupWebView() {
         val webView = binding.mainWebview
         
@@ -114,13 +83,9 @@ class MainActivity : AppCompatActivity() {
             setSupportZoom(true)
             builtInZoomControls = true
             displayZoomControls = false
-            userAgentString = if (PreferenceManager.isDesktopMode) {
-                DESKTOP_USER_AGENT
-            } else {
-                MOBILE_USER_AGENT
-            }
-            blockNetworkLoads = false
             blockNetworkImage = false
+            loadsImagesAutomatically = true
+            userAgentString = if (PreferenceManager.isDesktopMode) DESKTOP_UA else MOBILE_UA
         }
         
         CookieManager.getInstance().apply {
@@ -129,17 +94,21 @@ class MainActivity : AppCompatActivity() {
             flush()
         }
         
-        webView.addJavascriptInterface(
-            WebAppInterface(this),
-            WebAppInterface.INTERFACE_NAME
-        )
-        
         webView.webViewClient = object : WebViewClient() {
             override fun shouldInterceptRequest(
                 view: WebView?,
                 request: WebResourceRequest?
             ): WebResourceResponse? {
-                if (PreferenceManager.isAdBlockEnabled && AdBlocker.isAd(request?.url.toString())) {
+                val url = request?.url.toString()
+                
+                if (url.contains(".jpg") || url.contains(".png") || 
+                    url.contains(".webp") || url.contains(".gif") ||
+                    url.contains("ytimg.com") || url.contains("ggpht.com") ||
+                    url.contains("googleusercontent.com")) {
+                    return super.shouldInterceptRequest(view, request)
+                }
+                
+                if (PreferenceManager.isAdBlockEnabled && AdBlocker.isAd(url)) {
                     return AdBlocker.createEmptyResponse()
                 }
                 return super.shouldInterceptRequest(view, request)
@@ -153,8 +122,7 @@ class MainActivity : AppCompatActivity() {
             override fun onPageFinished(view: WebView?, url: String?) {
                 super.onPageFinished(view, url)
                 binding.progressBar.visibility = View.GONE
-                
-                injectAllScripts()
+                injectScripts()
             }
             
             override fun onReceivedError(
@@ -171,25 +139,18 @@ class MainActivity : AppCompatActivity() {
         }
         
         webView.webChromeClient = object : WebChromeClient() {
-            private var customView: View? = null
-            
             override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                if (newProgress == 100) {
-                    binding.progressBar.visibility = View.GONE
-                } else {
-                    binding.progressBar.visibility = View.VISIBLE
-                }
+                binding.progressBar.visibility = if (newProgress == 100) View.GONE else View.VISIBLE
             }
             
             override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
-                if (customView != null) {
+                if (customViewContainer != null) {
                     callback?.onCustomViewHidden()
                     return
                 }
                 
-                customView = view
+                isFullscreen = true
                 customViewCallback = callback
-                
                 customViewContainer = FrameLayout(this@MainActivity).apply {
                     setBackgroundColor(0xFF000000.toInt())
                     addView(view, FrameLayout.LayoutParams(
@@ -198,23 +159,18 @@ class MainActivity : AppCompatActivity() {
                     ))
                 }
                 
-                window.setFlags(
-                    WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                    WindowManager.LayoutParams.FLAG_FULLSCREEN
-                )
-                
+                window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
                 setContentView(customViewContainer)
             }
             
             override fun onHideCustomView() {
-                if (customView == null) return
+                if (customViewContainer == null) return
                 
+                isFullscreen = false
                 window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
                 
                 customViewContainer?.removeAllViews()
                 customViewContainer = null
-                
-                customView = null
                 customViewCallback?.onCustomViewHidden()
                 customViewCallback = null
                 
@@ -228,127 +184,98 @@ class MainActivity : AppCompatActivity() {
             }
         }
         
+        loadUrl()
+    }
+    
+    private fun loadUrl() {
         val url = if (PreferenceManager.isDesktopMode) YOUTUBE_DESKTOP_URL else YOUTUBE_URL
-        webView.loadUrl(url)
+        binding.mainWebview.loadUrl(url)
     }
     
-    private fun injectAllScripts() {
-        injectBackgroundPlayScript()
-        
-        if (PreferenceManager.isAdBlockEnabled) {
-            injectAdBlockScript()
-        }
-        
-        WebAppInterface.injectJavaScript(binding.mainWebview)
-        
-        // Keep video playing
-        keepVideoAlive()
-    }
-    
-    @SuppressLint("JavascriptInterface")
-    private fun injectBackgroundPlayScript() {
+    private fun injectScripts() {
         val js = """
             (function() {
                 'use strict';
                 
-                if (window.__bgPlayInjected) return;
-                window.__bgPlayInjected = true;
+                // Ad blocking
+                if (window.__adBlockInjected === undefined) {
+                    window.__adBlockInjected = true;
+                    var style = document.createElement('style');
+                    style.innerHTML = `
+                        .ytp-ad-module, .ytp-ad-overlay-container, .video-ads, 
+                        .ytp-ad-progress-list, ytd-ad-slot-renderer, ytd-display-ad-renderer,
+                        ytd-promoted-video-renderer, ytd-in-feed-ad-layout-renderer,
+                        #masthead-ad, #player-ads, .ytp-ad-player-overlay,
+                        tp-yt-iron-overlay-backdrop, ytd-mealbar-promo-renderer {
+                            display: none !important; visibility: hidden !important;
+                        }
+                    `;
+                    document.head.appendChild(style);
+                }
                 
-                console.log('[YouTubeLite] Injecting background play...');
-                
-                // 1. Override visibility properties
-                var overrideProps = function(obj, propName, value) {
+                // Background play - Override visibility
+                if (window.__bgPlayInjected === undefined) {
+                    window.__bgPlayInjected = true;
+                    
                     try {
-                        Object.defineProperty(obj, propName, {
-                            get: function() { return value; },
-                            set: function() {},
-                            configurable: true,
-                            enumerable: true
+                        Object.defineProperty(document, 'hidden', {
+                            get: function() { return false; },
+                            configurable: true
+                        });
+                        Object.defineProperty(document, 'visibilityState', {
+                            get: function() { return 'visible'; },
+                            configurable: true
+                        });
+                        Object.defineProperty(document, 'webkitHidden', {
+                            get: function() { return false; },
+                            configurable: true
                         });
                     } catch(e) {}
-                };
-                
-                overrideProps(document, 'hidden', false);
-                overrideProps(document, 'visibilityState', 'visible');
-                overrideProps(document, 'webkitHidden', false);
-                overrideProps(document, 'webkitVisibilityState', 'visible');
-                overrideProps(window, 'hidden', false);
-                
-                // 2. Block visibility events
-                ['visibilitychange', 'webkitvisibilitychange', 'mozvisibilitychange', 
-                 'msvisibilitychange', 'pagehide', 'pageshow', 'freeze', 'resume'].forEach(function(evt) {
-                    document.addEventListener(evt, function(e) {
+                    
+                    var blockEvent = function(e) {
                         e.stopImmediatePropagation();
                         e.preventDefault();
+                    };
+                    
+                    ['visibilitychange', 'webkitvisibilitychange', 'pagehide', 'freeze'].forEach(function(evt) {
+                        document.addEventListener(evt, blockEvent, true);
+                        window.addEventListener(evt, blockEvent, true);
+                    });
+                    
+                    // Prevent auto-pause
+                    var origPause = HTMLVideoElement.prototype.pause;
+                    HTMLVideoElement.prototype.pause = function() {
+                        if (this.__userPaused || this.ended) {
+                            return origPause.apply(this, arguments);
+                        }
+                    };
+                    
+                    // Track user pause
+                    document.addEventListener('click', function(e) {
+                        var btn = e.target.closest('.ytp-play-button');
+                        if (btn) {
+                            var v = document.querySelector('video');
+                            if (v) v.__userPaused = !v.paused;
+                        }
                     }, true);
-                    window.addEventListener(evt, function(e) {
-                        e.stopImmediatePropagation();
-                        e.preventDefault();
-                    }, true);
-                });
-                
-                // 3. Override EventTarget.addEventListener
-                var origAdd = EventTarget.prototype.addEventListener;
-                EventTarget.prototype.addEventListener = function(type, fn, opts) {
-                    if (['visibilitychange', 'webkitvisibilitychange', 'blur', 'focusout'].indexOf(type) !== -1) {
-                        return;
-                    }
-                    return origAdd.call(this, type, fn, opts);
-                };
-                
-                // 4. Prevent video pause
-                var origPause = HTMLVideoElement.prototype.pause;
-                HTMLVideoElement.prototype.pause = function() {
-                    if (this.__forcePause || this.ended || this.__userPaused) {
-                        return origPause.apply(this, arguments);
-                    }
-                    console.log('[YouTubeLite] Blocked auto-pause');
-                };
-                
-                // 5. Track user pause
-                document.addEventListener('click', function(e) {
-                    var btn = e.target.closest('.ytp-play-button') || 
-                              e.target.closest('[aria-label*="Play"]') ||
-                              e.target.closest('[aria-label*="Pause"]');
-                    if (btn && document.querySelector('video')) {
-                        document.querySelector('video').__userPaused = !document.querySelector('video').paused;
-                    }
-                }, true);
-                
-                document.addEventListener('keydown', function(e) {
-                    if (e.code === 'Space' && document.querySelector('video')) {
-                        document.querySelector('video').__userPaused = !document.querySelector('video').paused;
-                    }
-                }, true);
-                
-                console.log('[YouTubeLite] Background play ready!');
+                    
+                    // Keep playing
+                    setInterval(function() {
+                        var v = document.querySelector('video');
+                        if (v && !v.paused === false && !v.ended && !v.__userPaused) {
+                            v.play().catch(function(){});
+                        }
+                    }, 500);
+                }
             })();
         """.trimIndent()
         
         binding.mainWebview.evaluateJavascript(js, null)
     }
     
-    private fun injectAdBlockScript() {
-        binding.mainWebview.evaluateJavascript(AdBlocker.getAdBlockCss(), null)
-    }
-    
-    private fun keepVideoAlive() {
-        binding.mainWebview.evaluateJavascript(
-            """
-            (function() {
-                var video = document.querySelector('video');
-                if (video && !video.paused && !video.ended) {
-                    video.play().catch(function(){});
-                }
-            })();
-            """,
-            null
-        )
-    }
-    
     private fun setupNetworkCallback() {
-        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val networkRequest = NetworkRequest.Builder()
+        val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val request = NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
         
@@ -356,13 +283,11 @@ class MainActivity : AppCompatActivity() {
             override fun onAvailable(network: Network) {
                 runOnUiThread { hideOfflineView() }
             }
-            
             override fun onLost(network: Network) {
                 runOnUiThread { showOfflineView() }
             }
         }
-        
-        connectivityManager.registerNetworkCallback(networkRequest, networkCallback!!)
+        cm.registerNetworkCallback(request, networkCallback!!)
     }
     
     private fun isNetworkAvailable(): Boolean {
@@ -375,6 +300,12 @@ class MainActivity : AppCompatActivity() {
     private fun showOfflineView() {
         binding.offlineLayout.visibility = View.VISIBLE
         binding.mainWebview.visibility = View.GONE
+        binding.btnRetry.setOnClickListener {
+            if (isNetworkAvailable()) {
+                hideOfflineView()
+                binding.mainWebview.reload()
+            }
+        }
     }
     
     private fun hideOfflineView() {
@@ -385,7 +316,7 @@ class MainActivity : AppCompatActivity() {
     private fun setupBackPressedHandler() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (customViewContainer != null) {
+                if (isFullscreen && customViewCallback != null) {
                     binding.mainWebview.webChromeClient?.onHideCustomView()
                     return
                 }
@@ -400,15 +331,13 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun setupFab() {
-        binding.fabPip.setOnClickListener {
-            enterPictureInPicture()
-        }
+        binding.fabPip.setOnClickListener { enterPiP() }
     }
     
-    private fun enterPictureInPicture(): Boolean {
+    private fun enterPiP(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
-                try {
+                return try {
                     val params = PictureInPictureParams.Builder()
                         .setAspectRatio(Rational(16, 9))
                         .apply {
@@ -417,10 +346,10 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                         .build()
-                    
-                    return enterPictureInPictureMode(params)
+                    enterPictureInPictureMode(params)
                 } catch (e: Exception) {
-                    Log.e(TAG, "PiP error", e)
+                    Log.e(TAG, "PiP failed", e)
+                    false
                 }
             }
         }
@@ -429,34 +358,20 @@ class MainActivity : AppCompatActivity() {
     
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            enterPictureInPicture()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && PreferenceManager.isBackgroundPlayEnabled) {
+            enterPiP()
         }
-        
-        // Acquire wake lock for background playback
-        wakeLock?.acquire(30 * 60 * 1000L)
-        
-        // Keep video playing
-        keepVideoAlive()
     }
     
-    override fun onPictureInPictureModeChanged(
-        isInPictureInPictureMode: Boolean,
-        newConfig: Configuration
-    ) {
-        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+    override fun onPictureInPictureModeChanged(isInPiP: Boolean, newConfig: Configuration) {
+        super.onPictureInPictureModeChanged(isInPiP, newConfig)
+        binding.fabPip.isVisible = !isInPiP
         
-        binding.fabPip.isVisible = !isInPictureInPictureMode
-        
-        if (isInPictureInPictureMode) {
-            window.setFlags(
-                WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                WindowManager.LayoutParams.FLAG_FULLSCREEN
+        if (isInPiP) {
+            binding.mainWebview.evaluateJavascript(
+                "(function(){var v=document.querySelector('video');if(v)v.play();})();",
+                null
             )
-            keepVideoAlive()
-        } else {
-            window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
         }
     }
     
@@ -469,7 +384,6 @@ class MainActivity : AppCompatActivity() {
     
     private fun showTelegramDialog() {
         val dialogBinding = DialogTelegramBinding.inflate(layoutInflater)
-        
         val dialog = MaterialAlertDialogBuilder(this)
             .setView(dialogBinding.root)
             .setCancelable(true)
@@ -479,7 +393,7 @@ class MainActivity : AppCompatActivity() {
         
         dialogBinding.btnJoin.setOnClickListener {
             PreferenceManager.isTgJoined = true
-            openTelegramChannel()
+            openTelegram()
             dialog.dismiss()
         }
         
@@ -491,7 +405,7 @@ class MainActivity : AppCompatActivity() {
         dialog.show()
     }
     
-    private fun openTelegramChannel() {
+    private fun openTelegram() {
         try {
             startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=JubairSensei")))
         } catch (e: Exception) {
@@ -499,81 +413,41 @@ class MainActivity : AppCompatActivity() {
         }
     }
     
-    private fun requestBatteryOptimization() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-            if (!pm.isIgnoringBatteryOptimizations(packageName)) {
-                try {
-                    val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
-                        data = Uri.parse("package:$packageName")
-                    }
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    Log.e(TAG, "Battery optimization request failed", e)
-                }
-            }
-        }
-    }
-    
     fun hardReload() {
         CookieManager.getInstance().flush()
-        binding.mainWebview.apply {
-            clearCache(true)
-            clearHistory()
-        }
-        
-        val url = if (PreferenceManager.isDesktopMode) YOUTUBE_DESKTOP_URL else YOUTUBE_URL
-        binding.mainWebview.loadUrl(url)
-        
+        binding.mainWebview.clearCache(true)
+        binding.mainWebview.clearHistory()
+        loadUrl()
         Toast.makeText(this, "Reloaded", Toast.LENGTH_SHORT).show()
     }
     
     fun clearAllCache() {
-        binding.mainWebview.apply {
-            clearCache(true)
-            clearHistory()
-        }
-        
+        binding.mainWebview.clearCache(true)
+        binding.mainWebview.clearHistory()
         CookieManager.getInstance().removeAllCookies(null)
-        
-        try {
-            cacheDir.deleteRecursively()
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        
+        cacheDir.deleteRecursively()
         Toast.makeText(this, "Cache cleared", Toast.LENGTH_SHORT).show()
     }
     
     fun toggleDesktopMode(enabled: Boolean) {
         PreferenceManager.isDesktopMode = enabled
-        binding.mainWebview.settings.userAgentString = if (enabled) DESKTOP_USER_AGENT else MOBILE_USER_AGENT
+        binding.mainWebview.settings.userAgentString = if (enabled) DESKTOP_UA else MOBILE_UA
         hardReload()
     }
     
     override fun onResume() {
         super.onResume()
         binding.mainWebview.onResume()
-        injectAllScripts()
-        
-        // Release wake lock when coming back
-        wakeLock?.let {
-            if (it.isHeld) it.release()
-        }
+        injectScripts()
     }
     
     override fun onPause() {
-        // DO NOT call super.onPause() or webView.onPause() for background play!
-        // Acquire wake lock
-        wakeLock?.acquire(30 * 60 * 1000L)
-        
-        // Keep video alive
-        keepVideoAlive()
-    }
-    
-    override fun onStop() {
-        // Keep video playing in background
-        keepVideoAlive()
+        super.onPause()
+        // Don't pause WebView for background play
+        binding.mainWebview.evaluateJavascript(
+            "(function(){var v=document.querySelector('video');if(v&&!v.ended)v.play();})();",
+            null
+        )
     }
     
     override fun onDestroy() {
@@ -581,17 +455,6 @@ class MainActivity : AppCompatActivity() {
             val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             cm.unregisterNetworkCallback(it)
         }
-        
-        wakeLock?.let {
-            if (it.isHeld) it.release()
-        }
-        
-        try {
-            stopService(Intent(this, MusicPlayerService::class.java))
-        } catch (e: Exception) {
-            e.printStackTrace()
-        }
-        
         super.onDestroy()
     }
     

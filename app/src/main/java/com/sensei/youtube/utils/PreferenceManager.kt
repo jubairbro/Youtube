@@ -5,12 +5,7 @@ import android.content.SharedPreferences
 
 object PreferenceManager {
     
-    private const val PREF_NAME = "youtube_lite_prefs"
-    private const val KEY_FIRST_RUN = "is_first_run"
-    private const val KEY_TG_JOINED = "tg_joined"
-    private const val KEY_BACKGROUND_PLAY = "background_play"
-    private const val KEY_AD_BLOCK = "ad_block"
-    private const val KEY_DESKTOP_MODE = "desktop_mode"
+    private const val PREF_NAME = "youtube_lite"
     
     private lateinit var prefs: SharedPreferences
     
@@ -19,22 +14,22 @@ object PreferenceManager {
     }
     
     var isFirstRun: Boolean
-        get() = prefs.getBoolean(KEY_FIRST_RUN, true)
-        set(value) = prefs.edit().putBoolean(KEY_FIRST_RUN, value).apply()
+        get() = prefs.getBoolean("first_run", true)
+        set(value) = prefs.edit().putBoolean("first_run", value).apply()
     
     var isTgJoined: Boolean
-        get() = prefs.getBoolean(KEY_TG_JOINED, false)
-        set(value) = prefs.edit().putBoolean(KEY_TG_JOINED, value).apply()
+        get() = prefs.getBoolean("tg_joined", false)
+        set(value) = prefs.edit().putBoolean("tg_joined", value).apply()
     
     var isBackgroundPlayEnabled: Boolean
-        get() = prefs.getBoolean(KEY_BACKGROUND_PLAY, true)
-        set(value) = prefs.edit().putBoolean(KEY_BACKGROUND_PLAY, value).apply()
+        get() = prefs.getBoolean("bg_play", true)
+        set(value) = prefs.edit().putBoolean("bg_play", value).apply()
     
     var isAdBlockEnabled: Boolean
-        get() = prefs.getBoolean(KEY_AD_BLOCK, true)
-        set(value) = prefs.edit().putBoolean(KEY_AD_BLOCK, value).apply()
+        get() = prefs.getBoolean("ad_block", true)
+        set(value) = prefs.edit().putBoolean("ad_block", value).apply()
     
     var isDesktopMode: Boolean
-        get() = prefs.getBoolean(KEY_DESKTOP_MODE, false)
-        set(value) = prefs.edit().putBoolean(KEY_DESKTOP_MODE, value).apply()
+        get() = prefs.getBoolean("desktop", false)
+        set(value) = prefs.edit().putBoolean("desktop", value).apply()
 }

@@ -3,62 +3,44 @@ package com.sensei.youtube.utils
 import android.content.Context
 import android.webkit.WebResourceResponse
 import java.io.ByteArrayInputStream
-import java.io.IOException
 
 object AdBlocker {
     
     private lateinit var context: Context
-    private val blockedHosts = mutableSetOf<String>()
     private var isEnabled = true
     
-    private val AD_HOSTS = listOf(
+    private val AD_HOSTS = setOf(
         "googleads.g.doubleclick.net",
         "pagead2.googlesyndication.com",
         "ads.google.com",
-        "ads.youtube.com",
         "doubleclick.net",
         "googlesyndication.com",
         "googleadservices.com",
-        "googleads.g.doubleclick.net",
         "ad.doubleclick.net",
-        "static.doubleclick.net",
         "adservice.google.com",
-        "adservice.google.ca",
-        "adservice.google.co.uk",
         "pubads.g.doubleclick.net",
         "securepubads.g.doubleclick.net",
         "www.googletagservices.com",
         "partner.googleadservices.com",
         "tpc.googlesyndication.com",
-        "s0.2mdn.net",
-        "s1.2mdn.net",
-        "s2.2mdn.net",
-        "s3.2mdn.net",
-        "fonts.googleapis.com",
+        "googletagmanager.com",
+        "www.googletagmanager.com",
+        "ads.youtube.com"
+    )
+    
+    private val IMAGE_HOSTS = setOf(
+        "i.ytimg.com",
         "yt3.ggpht.com",
-        "i.ytimg.com"
+        "yt3.googleusercontent.com",
+        "i9.ytimg.com",
+        "i1.ytimg.com",
+        "i2.ytimg.com",
+        "i3.ytimg.com",
+        "i4.ytimg.com"
     )
     
     fun init(context: Context) {
         this.context = context
-        loadBlockedHosts()
-    }
-    
-    private fun loadBlockedHosts() {
-        blockedHosts.clear()
-        blockedHosts.addAll(AD_HOSTS)
-        try {
-            context.assets.open("adblock_hosts.txt").bufferedReader().use { reader ->
-                reader.forEachLine { line ->
-                    val host = line.trim()
-                    if (host.isNotEmpty() && !host.startsWith("#")) {
-                        blockedHosts.add(host)
-                    }
-                }
-            }
-        } catch (e: IOException) {
-            // File doesn't exist, use default list
-        }
     }
     
     fun setEnabled(enabled: Boolean) {
@@ -68,15 +50,23 @@ object AdBlocker {
     fun isAd(url: String?): Boolean {
         if (!isEnabled || url == null) return false
         
+        if (url.contains(".jpg") || url.contains(".png") || url.contains(".webp") || url.contains(".gif")) {
+            return false
+        }
+        
         val host = try {
             java.net.URL(url).host ?: return false
         } catch (e: Exception) {
             return false
         }
         
-        return blockedHosts.any { blockedHost ->
-            host.contains(blockedHost, ignoreCase = true) ||
-            host.endsWith(".$blockedHost", ignoreCase = true)
+        if (IMAGE_HOSTS.any { host.contains(it, ignoreCase = true) }) {
+            return false
+        }
+        
+        return AD_HOSTS.any { adHost ->
+            host.equals(adHost, ignoreCase = true) ||
+            host.endsWith(".$adHost", ignoreCase = true)
         }
     }
     
@@ -92,6 +82,7 @@ object AdBlocker {
         return """
             (function() {
                 var style = document.createElement('style');
+                style.type = 'text/css';
                 style.innerHTML = `
                     .ytp-ad-module,
                     .ytp-ad-overlay-container,
@@ -112,73 +103,23 @@ object AdBlocker {
                     [class*="googlead"],
                     [class*="adsbygoogle"],
                     [id*="google_ads"],
-                    [id*="ad-container"],
-                    [class*="-ad-"],
-                    [class*="ad-showing"],
-                    .ytp-ad-player-overlay,
-                    .ytp-ad-skip-button-container,
-                    ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"],
                     #masthead-ad,
                     #player-ads,
-                    #related ytd-ad-slot-renderer,
-                    ytd-action-companion-ad-renderer,
-                    ytd-companion-slot-renderer,
-                    ytd-iframe-companion-renderer,
-                    .ytp-ce-element.ytp-ce-element-show,
-                    #merch-shelf,
-                    ytd-merch-shelf-renderer,
-                    yt-mealbar-promo-renderer,
-                    tp-yt-iron-overlay-backward-compat,
-                    .style-scope.ytd-rich-section-renderer,
-                    ytd-statement-banner-renderer,
-                    ytd-brand-video-singleton-renderer,
-                    ytd-brand-video-shelf-renderer,
-                    #top { display: none !important; visibility: hidden !important; }
+                    ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"],
+                    .ytp-ad-player-overlay,
+                    .ytp-ad-skip-button-container,
+                    tp-yt-iron-overlay-backdrop {
+                        display: none !important; 
+                        visibility: hidden !important;
+                        opacity: 0 !important;
+                    }
                     
                     .html5-video-player.ad-interrupting .video-ads,
-                    .html5-video-player.ad-showing .video-ads,
-                    .ytp-ad-overlay-container,
-                    .ytp-ad-text,
-                    .ytp-ad-preview-text,
-                    .ytp-ad-skip-button,
-                    .ytp-ad-skip-button-modern { display: none !important; }
+                    .html5-video-player.ad-showing .video-ads {
+                        display: none !important;
+                    }
                 `;
                 document.head.appendChild(style);
-                
-                function removeAds() {
-                    var adSelectors = [
-                        '.ytp-ad-module',
-                        '.ytp-ad-overlay-container', 
-                        '.video-ads',
-                        'ytd-ad-slot-renderer',
-                        'ytd-display-ad-renderer',
-                        'ytd-promoted-video-renderer',
-                        'ytd-in-feed-ad-layout-renderer',
-                        '#masthead-ad',
-                        '#player-ads',
-                        'ytd-engagement-panel-section-list-renderer[target-id="engagement-panel-ads"]'
-                    ];
-                    
-                    adSelectors.forEach(function(selector) {
-                        var elements = document.querySelectorAll(selector);
-                        elements.forEach(function(el) {
-                            el.remove();
-                        });
-                    });
-                }
-                
-                removeAds();
-                
-                var observer = new MutationObserver(function(mutations) {
-                    removeAds();
-                });
-                
-                observer.observe(document.body, {
-                    childList: true,
-                    subtree: true
-                });
-                
-                setInterval(removeAds, 1000);
             })();
         """.trimIndent()
     }

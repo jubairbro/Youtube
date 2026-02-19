@@ -5,16 +5,12 @@
     android:viewportWidth="100"
     android:viewportHeight="100">
 
-    <path
-        android:fillColor="#2196F3"
-        android:pathData="M50,5C25.1,5 5,25.1 5,50s20.1,45 45,45s45,-20.1 45,-45S74.9,5 50,5z"/>
-
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M50,25C36.2,25 25,36.2 25,50s11.2,25 25,25s25,-11.2 25,-25S63.8,25 50,25zM50,68c-9.9,0 -18,-8.1 -18,-18s8.1,-18 18,-18s18,8.1 18,18S59.9,68 50,68z"/>
-
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M50,38L50,52L62,58L64,54L54,49L54,38Z"/>
-
+    <!-- Background -->
+    <path android:fillColor="#1A1A1A" android:pathData="M50,5C25.2,5 5,25.2 5,50s20.2,45 45,45s45,-20.2 45,-45S74.8,5 50,5z"/>
+    
+    <!-- WiFi/Data icon -->
+    <path android:fillColor="#2196F3" android:pathData="M50,70m-8,0a8,8 0,1 1,16 0a8,8 0,1 1,-16 0"/>
+    <path android:fillColor="#2196F3" android:pathData="M30,50Q50,35 70,50" android:strokeWidth="6" android:strokeColor="#2196F3" android:fillColor="@android:color/transparent" android:strokeLineCap="round"/>
+    <path android:fillColor="#2196F3" android:pathData="M20,35Q50,15 80,35" android:strokeWidth="6" android:strokeColor="#2196F3" android:fillColor="@android:color/transparent" android:strokeLineCap="round"/>
+    
 </vector>

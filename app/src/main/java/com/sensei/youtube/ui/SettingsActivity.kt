@@ -5,7 +5,6 @@ import android.net.Uri
 import android.os.Bundle
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
-import com.sensei.youtube.R
 import com.sensei.youtube.databinding.ActivitySettingsBinding
 import com.sensei.youtube.utils.PreferenceManager
 
@@ -25,9 +24,7 @@ class SettingsActivity : AppCompatActivity() {
     }
     
     private fun setupToolbar() {
-        binding.toolbar.setNavigationOnClickListener {
-            finish()
-        }
+        binding.toolbar.setNavigationOnClickListener { finish() }
     }
     
     private fun setupSwitches() {
@@ -50,20 +47,21 @@ class SettingsActivity : AppCompatActivity() {
     
     private fun setupButtons() {
         binding.btnHardReload.setOnClickListener {
-            Toast.makeText(this, "Reloading...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Settings saved. Restart app to apply.", Toast.LENGTH_SHORT).show()
         }
         
         binding.btnClearCache.setOnClickListener {
-            Toast.makeText(this, "Cache cleared", Toast.LENGTH_SHORT).show()
+            cacheDir.deleteRecursively()
+            Toast.makeText(this, "Cache cleared. Restart app.", Toast.LENGTH_SHORT).show()
         }
     }
     
     private fun setupVersion() {
         try {
-            val pm = packageManager.getPackageInfo(packageName, 0)
-            binding.txtVersion.text = "Version ${pm.versionName} (${if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) pm.longVersionCode else pm.versionCode})"
+            val pi = packageManager.getPackageInfo(packageName, 0)
+            binding.txtVersion.text = "Version ${pi.versionName}"
         } catch (e: Exception) {
-            binding.txtVersion.text = "Version 1.0.0"
+            binding.txtVersion.text = "Version 1.1.0"
         }
     }
 }

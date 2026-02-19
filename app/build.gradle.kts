@@ -11,8 +11,8 @@ android {
         applicationId = "com.sensei.youtube"
         minSdk = 24
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
     }
 
     signingConfigs {
@@ -72,8 +72,4 @@ dependencies {
     implementation("androidx.webkit:webkit:1.8.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.viewpager2:viewpager2:1.0.0")
-    implementation("androidx.media:media:1.7.0")
-    
-    implementation("androidx.media3:media3-exoplayer:1.2.1")
-    implementation("androidx.media3:media3-common:1.2.1")
 }

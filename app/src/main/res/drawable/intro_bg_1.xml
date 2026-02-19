@@ -5,12 +5,13 @@
     android:viewportWidth="100"
     android:viewportHeight="100">
 
-    <path
-        android:fillColor="#FF0000"
-        android:pathData="M50,5C25.1,5 5,25.1 5,50s20.1,45 45,45s45,-20.1 45,-45S74.9,5 50,5z"/>
-
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M40,30L40,70L70,50Z"/>
-
+    <!-- Background -->
+    <path android:fillColor="#1A1A1A" android:pathData="M50,5C25.2,5 5,25.2 5,50s20.2,45 45,45s45,-20.2 45,-45S74.8,5 50,5z"/>
+    
+    <!-- Play arrow -->
+    <path android:fillColor="#FF0000" android:pathData="M40,30L40,70L75,50Z"/>
+    
+    <!-- Repeat circle -->
+    <path android:fillColor="#FFFFFF" android:pathData="M50,22C36.8,22 26,32.8 26,46s10.8,24 24,24s24,-10.8 24,-24S63.2,22 50,22zM50,64c-9.9,0 -18,-8.1 -18,-18s8.1,-18 18,-18s18,8.1 18,18S59.9,64 50,64z"/>
+    
 </vector>
