@@ -65,6 +65,14 @@ class MainActivity : AppCompatActivity() {
         setupFabs()
         setupAudioPanel()
         showTg()
+        
+        // Set callback for notification controls
+        AudioService.webViewCallback = { action ->
+            when (action) {
+                "play" -> playWebView()
+                "pause" -> pauseWebView()
+            }
+        }
     }
     
     @SuppressLint("SetJavaScriptEnabled")
@@ -192,27 +200,23 @@ class MainActivity : AppCompatActivity() {
                 if(window._bgp)return;
                 window._bgp=1;
                 
-                // Override visibility
                 try{
                     Object.defineProperty(document,'hidden',{get:function(){return false},configurable:true});
                     Object.defineProperty(document,'visibilityState',{get:function(){return'visible'},configurable:true});
                     Object.defineProperty(document,'webkitHidden',{get:function(){return false},configurable:true});
                 }catch(e){}
                 
-                // Block visibility events
                 var block=function(e){e.stopImmediatePropagation();e.preventDefault();};
                 ['visibilitychange','webkitvisibilitychange','pagehide','freeze','blur'].forEach(function(t){
                     document.addEventListener(t,block,true);
                     window.addEventListener(t,block,true);
                 });
                 
-                // Prevent auto-pause
                 var _pause=HTMLVideoElement.prototype.pause;
                 HTMLVideoElement.prototype.pause=function(){
                     if(this._upause||this.ended)return _pause.apply(this,arguments);
                 };
                 
-                // Track user pause
                 document.addEventListener('click',function(e){
                     if(e.target.closest('.ytp-play-button')){
                         var v=document.querySelector('video');
@@ -220,7 +224,6 @@ class MainActivity : AppCompatActivity() {
                     }
                 },true);
                 
-                // Keep alive
                 setInterval(function(){
                     var v=document.querySelector('video');
                     if(v&&!v.paused===false&&!v.ended&&!v._upause)v.play().catch(function(){});
@@ -229,6 +232,14 @@ class MainActivity : AppCompatActivity() {
         """.trimIndent()
         
         bind.webview.evaluateJavascript(js, null)
+    }
+    
+    private fun playWebView() {
+        bind.webview.evaluateJavascript("(function(){var v=document.querySelector('video');if(v)v.play()})();", null)
+    }
+    
+    private fun pauseWebView() {
+        bind.webview.evaluateJavascript("(function(){var v=document.querySelector('video');if(v){v._upause=true;v.pause()}})();", null)
     }
     
     private fun setupNet() {
@@ -278,20 +289,19 @@ class MainActivity : AppCompatActivity() {
     }
     
     private fun setupFabs() {
-        // PiP button
         bind.fab.setOnClickListener { enterPip() }
-        
-        // Audio mode button
         bind.fabAudio.setOnClickListener { toggleAudioMode() }
     }
     
     private fun setupAudioPanel() {
         bind.btnAudioPause.setOnClickListener {
-            if (AudioService.isPlaying()) {
-                AudioService.pause()
+            if (AudioService.isPlaying) {
+                pauseWebView()
+                AudioService.setPlaying(this, false)
                 bind.btnAudioPause.setImageResource(R.drawable.ic_play)
             } else {
-                AudioService.play()
+                playWebView()
+                AudioService.setPlaying(this, true)
                 bind.btnAudioPause.setImageResource(R.drawable.ic_pause)
             }
         }
@@ -306,41 +316,29 @@ class MainActivity : AppCompatActivity() {
         isAudioMode = !isAudioMode
         
         if (isAudioMode) {
-            Toast.makeText(this, "🎵 Audio Mode - Playing in background", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "🎵 Audio Mode", Toast.LENGTH_SHORT).show()
             showAudioPanel()
-            
-            // Trigger video to send URL to ExoPlayer
-            bind.webview.evaluateJavascript("""
-                (function(){
-                    var v=document.querySelector('video');
-                    if(v){
-                        // Force play to trigger callback
-                        v.play();
-                    }
-                })();
-            """.trimIndent(), null)
+            AudioService.start(this)
+            playWebView()
+            AudioService.setPlaying(this, true)
         } else {
             hideAudioPanel()
-            AudioService.stop(this)
         }
     }
     
     private fun showAudioPanel() {
         bind.audioPanel.visibility = View.VISIBLE
-        bind.audioTitle.text = AudioService.title.ifEmpty { "Loading..." }
+        bind.audioTitle.text = AudioService.title.ifEmpty { "Now Playing" }
         bind.audioChannel.text = AudioService.author
-        bind.btnAudioPause.setImageResource(
-            if (AudioService.isPlaying()) R.drawable.ic_pause else R.drawable.ic_play
-        )
+        bind.btnAudioPause.setImageResource(R.drawable.ic_pause)
         
-        // Hide video visual (keep audio)
         bind.webview.evaluateJavascript("""
             (function(){
                 var v=document.querySelector('video');
                 if(v){
-                    v.style.visibility='hidden';
-                    v.style.position='fixed';
-                    v.style.top='-9999px';
+                    v.style.opacity='0.01';
+                    v.style.width='1px';
+                    v.style.height='1px';
                 }
             })();
         """.trimIndent(), null)
@@ -350,24 +348,16 @@ class MainActivity : AppCompatActivity() {
         isAudioMode = false
         bind.audioPanel.visibility = View.GONE
         
-        // Restore video
         bind.webview.evaluateJavascript("""
             (function(){
                 var v=document.querySelector('video');
                 if(v){
-                    v.style.visibility='visible';
-                    v.style.position='';
-                    v.style.top='';
+                    v.style.opacity='1';
+                    v.style.width='';
+                    v.style.height='';
                 }
             })();
         """.trimIndent(), null)
-    }
-    
-    fun updateAudioPanel(title: String, channel: String) {
-        runOnUiThread {
-            bind.audioTitle.text = title
-            bind.audioChannel.text = channel
-        }
     }
     
     private fun enterPip(): Boolean {
@@ -401,7 +391,7 @@ class MainActivity : AppCompatActivity() {
         bind.fab.isVisible = !inPip
         bind.fabAudio.isVisible = !inPip
         if (inPip) {
-            bind.webview.evaluateJavascript("(function(){var v=document.querySelector('video');if(v)v.play()})();", null)
+            playWebView()
         }
     }
     
@@ -462,12 +452,9 @@ class MainActivity : AppCompatActivity() {
     override fun onPause() {
         super.onPause()
         if (Prefs.bgPlay) {
-            bind.webview.evaluateJavascript("(function(){var v=document.querySelector('video');if(v&&!v.ended)v.play()})();", null)
-            
-            val intent = Intent(this, AudioService::class.java).apply {
-                action = AudioService.ACTION_UPDATE
-            }
-            try { startService(intent) } catch (e: Exception) {}
+            playWebView()
+            AudioService.start(this)
+            AudioService.setPlaying(this, true)
         }
     }
     
@@ -476,6 +463,7 @@ class MainActivity : AppCompatActivity() {
             val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             cm.unregisterNetworkCallback(it)
         }
+        AudioService.webViewCallback = null
         AudioService.stop(this)
         super.onDestroy()
     }
