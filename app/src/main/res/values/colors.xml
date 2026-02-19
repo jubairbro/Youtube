@@ -1,12 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="red_primary">#FF0000</color>
-    <color name="red_dark">#CC0000</color>
     <color name="black">#000000</color>
     <color name="white">#FFFFFF</color>
-    <color name="gray_dark">#121212</color>
-    <color name="gray_medium">#1F1F1F</color>
-    <color name="gray_light">#606060</color>
-    <color name="text_primary">#FFFFFF</color>
-    <color name="text_secondary">#AAAAAA</color>
+    <color name="red">#FF0000</color>
 </resources>

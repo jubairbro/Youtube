@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+    <!-- Dark circle -->
+    <path android:fillColor="#1A1A1A" android:pathData="M50,5C25.2,5 5,25.2 5,50s20.2,45 45,45s45,-20.2 45,-45S74.8,5 50,5z"/>
+
+    <!-- Play icon with repeat arrows -->
+    <path android:fillColor="#FF0000" android:pathData="M40,30L40,70L70,50Z"/>
+
+    <!-- Circular arrow -->
+    <path android:pathData="M50,25A25,25 0 1,0 75,50" android:strokeWidth="4" android:strokeColor="#FFFFFF" android:fillColor="@android:color/transparent"/>
+    <path android:fillColor="#FFFFFF" android:pathData="M75,42L75,58L82,50Z"/>
+
+</vector>

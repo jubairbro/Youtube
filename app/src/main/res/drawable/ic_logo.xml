@@ -5,14 +5,14 @@
     android:viewportWidth="108"
     android:viewportHeight="108">
 
-    <!-- Background Circle -->
+    <!-- Red circle background -->
     <path
         android:fillColor="#FF0000"
         android:pathData="M54,4C26.4,4 4,26.4 4,54s22.4,50 50,50s50,-22.4 50,-50S81.6,4 54,4z"/>
-    
-    <!-- Play Button Triangle -->
+
+    <!-- White play triangle -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M44,32L44,76L76,54Z"/>
+        android:pathData="M44,32L44,76L74,54Z"/>
 
 </vector>

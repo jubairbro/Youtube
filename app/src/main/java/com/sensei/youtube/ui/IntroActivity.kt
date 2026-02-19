@@ -1,6 +1,5 @@
 package com.sensei.youtube.ui
 
-import android.content.Context
 import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
@@ -10,106 +9,83 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
+import androidx.recyclerview.widget.RecyclerView
 import androidx.viewpager2.widget.ViewPager2
 import com.sensei.youtube.R
 import com.sensei.youtube.databinding.ActivityIntroBinding
-import com.sensei.youtube.utils.PreferenceManager
+import com.sensei.youtube.util.Prefs
 
 class IntroActivity : AppCompatActivity() {
     
-    private lateinit var binding: ActivityIntroBinding
+    private lateinit var bind: ActivityIntroBinding
     private val dots = mutableListOf<View>()
     
     private val slides = listOf(
-        Slide(R.drawable.intro_bg_1, R.string.intro_title_1, R.string.intro_desc_1),
-        Slide(R.drawable.intro_bg_2, R.string.intro_title_2, R.string.intro_desc_2),
-        Slide(R.drawable.intro_bg_3, R.string.intro_title_3, R.string.intro_desc_3)
+        Slide(R.drawable.ic_bg_play, "Background Play", "Continue playing audio when screen is off or app is minimized"),
+        Slide(R.drawable.ic_bg_safe, "Secure Login", "Your Google account stays secure with encrypted cookies"),
+        Slide(R.drawable.ic_bg_data, "Save Data", "Block ads and save bandwidth with smart ad blocking")
     )
     
-    data class Slide(val iconRes: Int, val titleRes: Int, val descRes: Int)
+    data class Slide(val icon: Int, val title: String, val desc: String)
     
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        binding = ActivityIntroBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+    override fun onCreate(s: Bundle?) {
+        super.onCreate(s)
+        bind = ActivityIntroBinding.inflate(layoutInflater)
+        setContentView(bind.root)
         
-        setupViewPager()
-        setupDots()
-        setupButtons()
-    }
-    
-    private fun setupViewPager() {
-        binding.viewPager.adapter = IntroAdapter()
-        binding.viewPager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
-            override fun onPageSelected(position: Int) {
-                updateDots(position)
-                updateButton(position)
+        bind.pager.adapter = Adapter()
+        bind.pager.registerOnPageChangeCallback(object : ViewPager2.OnPageChangeCallback() {
+            override fun onPageSelected(p: Int) {
+                updateDots(p)
+                bind.next.text = if (p == slides.lastIndex) "Get Started" else "Next"
             }
         })
+        
+        setupDots()
+        
+        bind.skip.setOnClickListener { done() }
+        bind.next.setOnClickListener {
+            if (bind.pager.currentItem == slides.lastIndex) done()
+            else bind.pager.currentItem += 1
+        }
     }
     
     private fun setupDots() {
-        dots.clear()
-        binding.dotsIndicator.removeAllViews()
-        
         repeat(slides.size) { i ->
-            val dot = View(this).apply {
-                layoutParams = LinearLayout.LayoutParams(if (i == 0) 24.dp else 8.dp, 8.dp).apply {
-                    marginEnd = 4.dp
-                }
-                setBackgroundResource(if (i == 0) R.drawable.bg_button_primary else R.drawable.bg_button_secondary)
+            val v = View(this).apply {
+                layoutParams = LinearLayout.LayoutParams(if (i == 0) 48 else 16, 16).apply { marginEnd = 8 }
+                setBackgroundResource(if (i == 0) R.drawable.bg_dot_on else R.drawable.bg_dot_off)
             }
-            dots.add(dot)
-            binding.dotsIndicator.addView(dot)
+            dots.add(v)
+            bind.dots.addView(v)
         }
     }
     
-    private fun updateDots(position: Int) {
-        dots.forEachIndexed { index, dot ->
-            dot.layoutParams = LinearLayout.LayoutParams(if (index == position) 24.dp else 8.dp, 8.dp).apply {
-                marginEnd = 4.dp
-            }
-            dot.setBackgroundResource(if (index == position) R.drawable.bg_button_primary else R.drawable.bg_button_secondary)
+    private fun updateDots(p: Int) {
+        dots.forEachIndexed { i, v ->
+            v.layoutParams = LinearLayout.LayoutParams(if (i == p) 48 else 16, 16).apply { marginEnd = 8 }
+            v.setBackgroundResource(if (i == p) R.drawable.bg_dot_on else R.drawable.bg_dot_off)
         }
     }
     
-    private fun updateButton(position: Int) {
-        binding.btnNext.text = if (position == slides.size - 1) getString(R.string.get_started) else getString(R.string.next)
-    }
-    
-    private fun setupButtons() {
-        binding.btnSkip.setOnClickListener { finishIntro() }
-        binding.btnNext.setOnClickListener {
-            if (binding.viewPager.currentItem == slides.size - 1) {
-                finishIntro()
-            } else {
-                binding.viewPager.currentItem += 1
-            }
-        }
-    }
-    
-    private fun finishIntro() {
-        PreferenceManager.isFirstRun = false
+    private fun done() {
+        Prefs.firstRun = false
         startActivity(Intent(this, MainActivity::class.java))
         finish()
         overridePendingTransition(android.R.anim.fade_in, android.R.anim.fade_out)
     }
     
-    private val Int.dp: Int get() = (this * resources.displayMetrics.density).toInt()
-    
-    private inner class IntroAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<IntroViewHolder>() {
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) = IntroViewHolder(
-            LayoutInflater.from(parent.context).inflate(R.layout.item_intro_slide, parent, false)
-        )
-        override fun onBindViewHolder(holder: IntroViewHolder, position: Int) = holder.bind(slides[position])
+    private inner class Adapter : RecyclerView.Adapter<VH>() {
+        override fun onCreateViewHolder(p: ViewGroup, t: Int) = VH(LayoutInflater.from(p.context).inflate(R.layout.item_intro, p, false))
+        override fun onBindViewHolder(h: VH, p: Int) { h.bind(slides[p]) }
         override fun getItemCount() = slides.size
     }
     
-    private inner class IntroViewHolder(view: View) : androidx.recyclerview.widget.RecyclerView.ViewHolder(view) {
-        fun bind(slide: Slide) {
-            itemView.findViewById<ImageView>(R.id.img_icon).setImageResource(slide.iconRes)
-            itemView.findViewById<TextView>(R.id.txt_title).setText(slide.titleRes)
-            itemView.findViewById<TextView>(R.id.txt_description).setText(slide.descRes)
+    private inner class VH(v: View) : RecyclerView.ViewHolder(v) {
+        fun bind(s: Slide) {
+            itemView.findViewById<ImageView>(R.id.icon).setImageResource(s.icon)
+            itemView.findViewById<TextView>(R.id.title).text = s.title
+            itemView.findViewById<TextView>(R.id.desc).text = s.desc
         }
     }
 }

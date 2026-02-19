@@ -1,5 +1,6 @@
 package com.sensei.youtube.ui
 
+import android.annotation.SuppressLint
 import android.app.PictureInPictureParams
 import android.content.Context
 import android.content.Intent
@@ -8,68 +9,69 @@ import android.content.res.Configuration
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
-import android.net.NetworkRequest
 import android.net.Uri
+import android.net.http.SslError
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.util.Rational
 import android.view.View
 import android.view.WindowManager
-import android.webkit.CookieManager
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebResourceResponse
-import android.webkit.WebSettings
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.webkit.*
 import android.widget.FrameLayout
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.WindowCompat
 import androidx.core.view.isVisible
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
 import com.sensei.youtube.R
 import com.sensei.youtube.databinding.ActivityMainBinding
 import com.sensei.youtube.databinding.DialogTelegramBinding
-import com.sensei.youtube.utils.AdBlocker
-import com.sensei.youtube.utils.PreferenceManager
+import com.sensei.youtube.service.AudioService
+import com.sensei.youtube.util.AdBlock
+import com.sensei.youtube.util.JSBridge
+import com.sensei.youtube.util.Prefs
 
 class MainActivity : AppCompatActivity() {
     
-    private lateinit var binding: ActivityMainBinding
-    private var networkCallback: ConnectivityManager.NetworkCallback? = null
-    private var telegramDialogShown = false
-    private var customViewContainer: FrameLayout? = null
-    private var customViewCallback: WebChromeClient.CustomViewCallback? = null
-    private var isFullscreen = false
+    private lateinit var bind: ActivityMainBinding
+    private var netCallback: ConnectivityManager.NetworkCallback? = null
+    private var customView: FrameLayout? = null
+    private var customCallback: WebChromeClient.CustomViewCallback? = null
+    private var isFs = false
     
     companion object {
-        private const val TAG = "MainActivity"
-        private const val YOUTUBE_URL = "https://m.youtube.com"
-        private const val YOUTUBE_DESKTOP_URL = "https://www.youtube.com"
+        private const val TAG = "Main"
+        private const val URL = "https://m.youtube.com"
+        private const val URL_D = "https://www.youtube.com"
         
-        private const val MOBILE_UA = "Mozilla/5.0 (Linux; Android 14) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-        private const val DESKTOP_UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        private const val UA_M = "Mozilla/5.0 (Linux; Android 14; Pixel 8 Pro) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
+        private const val UA_D = "Mozilla/5.0 (Windows NT 11.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
     }
     
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        binding = ActivityMainBinding.inflate(layoutInflater)
-        setContentView(binding.root)
+    override fun onCreate(s: Bundle?) {
+        super.onCreate(s)
         
-        setupWebView()
-        setupNetworkCallback()
-        setupBackPressedHandler()
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        
+        bind = ActivityMainBinding.inflate(layoutInflater)
+        setContentView(bind.root)
+        
+        setupWv()
+        setupNet()
+        setupBack()
         setupFab()
-        checkAndShowTelegramDialog()
+        showTg()
     }
     
-    @Suppress("DEPRECATION", "SetJavaScriptEnabled")
-    private fun setupWebView() {
-        val webView = binding.mainWebview
+    @SuppressLint("SetJavaScriptEnabled")
+    private fun setupWv() {
+        val wv = bind.webview
         
-        webView.settings.apply {
+        WebSettingsCompat.forceDark(wv.settings, WebSettingsCompat.FORCE_DARK_ON)
+        
+        wv.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
             databaseEnabled = true
@@ -80,265 +82,212 @@ class MainActivity : AppCompatActivity() {
             mixedContentMode = WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             loadWithOverviewMode = true
             useWideViewPort = true
-            setSupportZoom(true)
             builtInZoomControls = true
             displayZoomControls = false
             blockNetworkImage = false
             loadsImagesAutomatically = true
-            userAgentString = if (PreferenceManager.isDesktopMode) DESKTOP_UA else MOBILE_UA
+            javaScriptCanOpenWindowsAutomatically = true
+            setSupportMultipleWindows(true)
+            userAgentString = if (Prefs.desktop) UA_D else UA_M
         }
         
         CookieManager.getInstance().apply {
             setAcceptCookie(true)
-            setAcceptThirdPartyCookies(webView, true)
+            setAcceptThirdPartyCookies(wv, true)
             flush()
         }
         
-        webView.webViewClient = object : WebViewClient() {
-            override fun shouldInterceptRequest(
-                view: WebView?,
-                request: WebResourceRequest?
-            ): WebResourceResponse? {
-                val url = request?.url.toString()
+        wv.addJavascriptInterface(JSBridge(this), JSBridge.NAME)
+        
+        wv.webViewClient = object : WebViewClient() {
+            override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest?): WebResourceResponse? {
+                val url = r?.url.toString()
                 
+                // Allow images always
                 if (url.contains(".jpg") || url.contains(".png") || 
-                    url.contains(".webp") || url.contains(".gif") ||
-                    url.contains("ytimg.com") || url.contains("ggpht.com") ||
-                    url.contains("googleusercontent.com")) {
-                    return super.shouldInterceptRequest(view, request)
+                    url.contains(".webp") || url.contains(".gif")) {
+                    return super.shouldInterceptRequest(v, r)
                 }
                 
-                if (PreferenceManager.isAdBlockEnabled && AdBlocker.isAd(url)) {
-                    return AdBlocker.createEmptyResponse()
+                if (Prefs.adBlock && AdBlock.isAd(url)) {
+                    return WebResourceResponse("text/plain", "utf-8", null)
                 }
-                return super.shouldInterceptRequest(view, request)
+                return super.shouldInterceptRequest(v, r)
             }
             
-            override fun onPageStarted(view: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
-                super.onPageStarted(view, url, favicon)
-                binding.progressBar.visibility = View.VISIBLE
+            override fun onPageStarted(v: WebView?, url: String?, favicon: android.graphics.Bitmap?) {
+                super.onPageStarted(v, url, favicon)
+                bind.progress.visibility = View.VISIBLE
             }
             
-            override fun onPageFinished(view: WebView?, url: String?) {
-                super.onPageFinished(view, url)
-                binding.progressBar.visibility = View.GONE
-                injectScripts()
-            }
-            
-            override fun onReceivedError(
-                view: WebView?,
-                errorCode: Int,
-                description: String?,
-                failingUrl: String?
-            ) {
-                super.onReceivedError(view, errorCode, description, failingUrl)
-                if (!isNetworkAvailable()) {
-                    showOfflineView()
+            override fun onPageFinished(v: WebView?, url: String?) {
+                super.onPageFinished(v, url)
+                bind.progress.visibility = View.GONE
+                
+                // Inject scripts
+                if (Prefs.adBlock) {
+                    wv.evaluateJavascript(AdBlock.CSS, null)
                 }
+                injectBgPlay()
+                JSBridge.inject(wv)
+            }
+            
+            override fun onReceivedSslError(v: WebView?, h: SslErrorHandler?, e: SslError?) {
+                h?.proceed()
+            }
+            
+            override fun onReceivedError(v: WebView?, e: WebResourceRequest?, err: WebResourceError?) {
+                super.onReceivedError(v, e, err)
+                if (!isOnline()) showOffline()
             }
         }
         
-        webView.webChromeClient = object : WebChromeClient() {
-            override fun onProgressChanged(view: WebView?, newProgress: Int) {
-                binding.progressBar.visibility = if (newProgress == 100) View.GONE else View.VISIBLE
+        wv.webChromeClient = object : WebChromeClient() {
+            override fun onProgressChanged(v: WebView?, p: Int) {
+                bind.progress.visibility = if (p == 100) View.GONE else View.VISIBLE
             }
             
-            override fun onShowCustomView(view: View?, callback: CustomViewCallback?) {
-                if (customViewContainer != null) {
-                    callback?.onCustomViewHidden()
+            override fun onShowCustomView(view: View?, cb: CustomViewCallback?) {
+                if (customView != null) {
+                    cb?.onCustomViewHidden()
                     return
                 }
                 
-                isFullscreen = true
-                customViewCallback = callback
-                customViewContainer = FrameLayout(this@MainActivity).apply {
+                isFs = true
+                customCallback = cb
+                customView = FrameLayout(this@MainActivity).apply {
                     setBackgroundColor(0xFF000000.toInt())
-                    addView(view, FrameLayout.LayoutParams(
-                        FrameLayout.LayoutParams.MATCH_PARENT,
-                        FrameLayout.LayoutParams.MATCH_PARENT
-                    ))
+                    addView(view, FrameLayout.LayoutParams(-1, -1))
                 }
                 
-                window.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
-                setContentView(customViewContainer)
+                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+                setContentView(customView)
             }
             
             override fun onHideCustomView() {
-                if (customViewContainer == null) return
+                if (customView == null) return
                 
-                isFullscreen = false
-                window.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                isFs = false
+                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
                 
-                customViewContainer?.removeAllViews()
-                customViewContainer = null
-                customViewCallback?.onCustomViewHidden()
-                customViewCallback = null
+                customView?.removeAllViews()
+                customView = null
+                customCallback?.onCustomViewHidden()
+                customCallback = null
                 
-                setContentView(binding.root)
+                setContentView(bind.root)
             }
             
-            override fun onPermissionRequest(request: android.webkit.PermissionRequest?) {
+            override fun onPermissionRequest(r: PermissionRequest?) {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
-                    request?.grant(request.resources)
+                    r?.grant(r.resources)
                 }
             }
         }
         
-        loadUrl()
+        load()
     }
     
-    private fun loadUrl() {
-        val url = if (PreferenceManager.isDesktopMode) YOUTUBE_DESKTOP_URL else YOUTUBE_URL
-        binding.mainWebview.loadUrl(url)
-    }
-    
-    private fun injectScripts() {
+    private fun injectBgPlay() {
         val js = """
-            (function() {
-                'use strict';
+            (function(){
+                if(window._bgp)return;
+                window._bgp=1;
                 
-                // Ad blocking
-                if (window.__adBlockInjected === undefined) {
-                    window.__adBlockInjected = true;
-                    var style = document.createElement('style');
-                    style.innerHTML = `
-                        .ytp-ad-module, .ytp-ad-overlay-container, .video-ads, 
-                        .ytp-ad-progress-list, ytd-ad-slot-renderer, ytd-display-ad-renderer,
-                        ytd-promoted-video-renderer, ytd-in-feed-ad-layout-renderer,
-                        #masthead-ad, #player-ads, .ytp-ad-player-overlay,
-                        tp-yt-iron-overlay-backdrop, ytd-mealbar-promo-renderer {
-                            display: none !important; visibility: hidden !important;
-                        }
-                    `;
-                    document.head.appendChild(style);
-                }
+                // Override visibility
+                try{
+                    Object.defineProperty(document,'hidden',{get:function(){return false},configurable:true});
+                    Object.defineProperty(document,'visibilityState',{get:function(){return'visible'},configurable:true});
+                    Object.defineProperty(document,'webkitHidden',{get:function(){return false},configurable:true});
+                }catch(e){}
                 
-                // Background play - Override visibility
-                if (window.__bgPlayInjected === undefined) {
-                    window.__bgPlayInjected = true;
-                    
-                    try {
-                        Object.defineProperty(document, 'hidden', {
-                            get: function() { return false; },
-                            configurable: true
-                        });
-                        Object.defineProperty(document, 'visibilityState', {
-                            get: function() { return 'visible'; },
-                            configurable: true
-                        });
-                        Object.defineProperty(document, 'webkitHidden', {
-                            get: function() { return false; },
-                            configurable: true
-                        });
-                    } catch(e) {}
-                    
-                    var blockEvent = function(e) {
-                        e.stopImmediatePropagation();
-                        e.preventDefault();
-                    };
-                    
-                    ['visibilitychange', 'webkitvisibilitychange', 'pagehide', 'freeze'].forEach(function(evt) {
-                        document.addEventListener(evt, blockEvent, true);
-                        window.addEventListener(evt, blockEvent, true);
-                    });
-                    
-                    // Prevent auto-pause
-                    var origPause = HTMLVideoElement.prototype.pause;
-                    HTMLVideoElement.prototype.pause = function() {
-                        if (this.__userPaused || this.ended) {
-                            return origPause.apply(this, arguments);
-                        }
-                    };
-                    
-                    // Track user pause
-                    document.addEventListener('click', function(e) {
-                        var btn = e.target.closest('.ytp-play-button');
-                        if (btn) {
-                            var v = document.querySelector('video');
-                            if (v) v.__userPaused = !v.paused;
-                        }
-                    }, true);
-                    
-                    // Keep playing
-                    setInterval(function() {
-                        var v = document.querySelector('video');
-                        if (v && !v.paused === false && !v.ended && !v.__userPaused) {
-                            v.play().catch(function(){});
-                        }
-                    }, 500);
-                }
+                // Block visibility events
+                var block=function(e){e.stopImmediatePropagation();e.preventDefault();};
+                ['visibilitychange','webkitvisibilitychange','pagehide','freeze','blur'].forEach(function(t){
+                    document.addEventListener(t,block,true);
+                    window.addEventListener(t,block,true);
+                });
+                
+                // Prevent auto-pause
+                var _pause=HTMLVideoElement.prototype.pause;
+                HTMLVideoElement.prototype.pause=function(){
+                    if(this._upause||this.ended)return _pause.apply(this,arguments);
+                };
+                
+                // Track user pause
+                document.addEventListener('click',function(e){
+                    if(e.target.closest('.ytp-play-button')){
+                        var v=document.querySelector('video');
+                        if(v)v._upause=!v.paused;
+                    }
+                },true);
+                
+                // Keep alive
+                setInterval(function(){
+                    var v=document.querySelector('video');
+                    if(v&&!v.paused===false&&!v.ended&&!v._upause)v.play().catch(function(){});
+                },500);
             })();
         """.trimIndent()
         
-        binding.mainWebview.evaluateJavascript(js, null)
+        bind.webview.evaluateJavascript(js, null)
     }
     
-    private fun setupNetworkCallback() {
+    private fun setupNet() {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val request = NetworkRequest.Builder()
+        val req = android.net.NetworkRequest.Builder()
             .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
             .build()
         
-        networkCallback = object : ConnectivityManager.NetworkCallback() {
-            override fun onAvailable(network: Network) {
-                runOnUiThread { hideOfflineView() }
-            }
-            override fun onLost(network: Network) {
-                runOnUiThread { showOfflineView() }
-            }
+        netCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(n: Network) { runOnUiThread { hideOffline() } }
+            override fun onLost(n: Network) { runOnUiThread { showOffline() } }
         }
-        cm.registerNetworkCallback(request, networkCallback!!)
+        cm.registerNetworkCallback(req, netCallback!!)
     }
     
-    private fun isNetworkAvailable(): Boolean {
+    private fun isOnline(): Boolean {
         val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-        val network = cm.activeNetwork ?: return false
-        val caps = cm.getNetworkCapabilities(network) ?: return false
-        return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+        val n = cm.activeNetwork ?: return false
+        val c = cm.getNetworkCapabilities(n) ?: return false
+        return c.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
     }
     
-    private fun showOfflineView() {
-        binding.offlineLayout.visibility = View.VISIBLE
-        binding.mainWebview.visibility = View.GONE
-        binding.btnRetry.setOnClickListener {
-            if (isNetworkAvailable()) {
-                hideOfflineView()
-                binding.mainWebview.reload()
-            }
+    private fun showOffline() {
+        bind.offline.visibility = View.VISIBLE
+        bind.webview.visibility = View.GONE
+        bind.retry.setOnClickListener {
+            if (isOnline()) { hideOffline(); bind.webview.reload() }
         }
     }
     
-    private fun hideOfflineView() {
-        binding.offlineLayout.visibility = View.GONE
-        binding.mainWebview.visibility = View.VISIBLE
+    private fun hideOffline() {
+        bind.offline.visibility = View.GONE
+        bind.webview.visibility = View.VISIBLE
     }
     
-    private fun setupBackPressedHandler() {
+    private fun setupBack() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                if (isFullscreen && customViewCallback != null) {
-                    binding.mainWebview.webChromeClient?.onHideCustomView()
+                if (isFs && customCallback != null) {
+                    bind.webview.webChromeClient?.onHideCustomView()
                     return
                 }
-                
-                if (binding.mainWebview.canGoBack()) {
-                    binding.mainWebview.goBack()
-                } else {
-                    moveTaskToBack(true)
-                }
+                if (bind.webview.canGoBack()) bind.webview.goBack()
+                else moveTaskToBack(true)
             }
         })
     }
     
     private fun setupFab() {
-        binding.fabPip.setOnClickListener { enterPiP() }
+        bind.fab.setOnClickListener { enterPip() }
     }
     
-    private fun enterPiP(): Boolean {
+    private fun enterPip(): Boolean {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             if (packageManager.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE)) {
                 return try {
-                    val params = PictureInPictureParams.Builder()
+                    val p = PictureInPictureParams.Builder()
                         .setAspectRatio(Rational(16, 9))
                         .apply {
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -346,11 +295,8 @@ class MainActivity : AppCompatActivity() {
                             }
                         }
                         .build()
-                    enterPictureInPictureMode(params)
-                } catch (e: Exception) {
-                    Log.e(TAG, "PiP failed", e)
-                    false
-                }
+                    enterPictureInPictureMode(p)
+                } catch (e: Exception) { false }
             }
         }
         return false
@@ -358,108 +304,92 @@ class MainActivity : AppCompatActivity() {
     
     override fun onUserLeaveHint() {
         super.onUserLeaveHint()
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && PreferenceManager.isBackgroundPlayEnabled) {
-            enterPiP()
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && Prefs.bgPlay) {
+            enterPip()
         }
     }
     
-    override fun onPictureInPictureModeChanged(isInPiP: Boolean, newConfig: Configuration) {
-        super.onPictureInPictureModeChanged(isInPiP, newConfig)
-        binding.fabPip.isVisible = !isInPiP
-        
-        if (isInPiP) {
-            binding.mainWebview.evaluateJavascript(
-                "(function(){var v=document.querySelector('video');if(v)v.play();})();",
-                null
-            )
+    override fun onPictureInPictureModeChanged(inPip: Boolean, c: Configuration) {
+        super.onPictureInPictureModeChanged(inPip, c)
+        bind.fab.isVisible = !inPip
+        if (inPip) {
+            bind.webview.evaluateJavascript("(function(){var v=document.querySelector('video');if(v)v.play()})();", null)
         }
     }
     
-    private fun checkAndShowTelegramDialog() {
-        if (!PreferenceManager.isTgJoined && !telegramDialogShown) {
-            showTelegramDialog()
-            telegramDialogShown = true
+    private fun showTg() {
+        if (!Prefs.tgShown) {
+            val d = DialogTelegramBinding.inflate(layoutInflater)
+            val diag = MaterialAlertDialogBuilder(this)
+                .setView(d.root)
+                .setCancelable(true)
+                .create()
+            diag.window?.setBackgroundDrawableResource(android.R.color.transparent)
+            
+            d.btnJoin.setOnClickListener {
+                Prefs.tgShown = true
+                try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=JubairSensei"))) }
+                catch (e: Exception) { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/JubairSensei"))) }
+                diag.dismiss()
+            }
+            d.btnLater.setOnClickListener { Prefs.tgShown = true; diag.dismiss() }
+            diag.show()
         }
     }
     
-    private fun showTelegramDialog() {
-        val dialogBinding = DialogTelegramBinding.inflate(layoutInflater)
-        val dialog = MaterialAlertDialogBuilder(this)
-            .setView(dialogBinding.root)
-            .setCancelable(true)
-            .create()
-        
-        dialog.window?.setBackgroundDrawableResource(android.R.color.transparent)
-        
-        dialogBinding.btnJoin.setOnClickListener {
-            PreferenceManager.isTgJoined = true
-            openTelegram()
-            dialog.dismiss()
-        }
-        
-        dialogBinding.btnLater.setOnClickListener {
-            PreferenceManager.isTgJoined = true
-            dialog.dismiss()
-        }
-        
-        dialog.show()
+    private fun load() {
+        bind.webview.loadUrl(if (Prefs.desktop) URL_D else URL)
     }
     
-    private fun openTelegram() {
-        try {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("tg://resolve?domain=JubairSensei")))
-        } catch (e: Exception) {
-            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://t.me/JubairSensei")))
-        }
-    }
-    
-    fun hardReload() {
+    fun reload() {
         CookieManager.getInstance().flush()
-        binding.mainWebview.clearCache(true)
-        binding.mainWebview.clearHistory()
-        loadUrl()
+        bind.webview.clearCache(true)
+        bind.webview.clearHistory()
+        load()
         Toast.makeText(this, "Reloaded", Toast.LENGTH_SHORT).show()
     }
     
-    fun clearAllCache() {
-        binding.mainWebview.clearCache(true)
-        binding.mainWebview.clearHistory()
+    fun clearCache() {
+        bind.webview.clearCache(true)
+        bind.webview.clearHistory()
         CookieManager.getInstance().removeAllCookies(null)
         cacheDir.deleteRecursively()
         Toast.makeText(this, "Cache cleared", Toast.LENGTH_SHORT).show()
     }
     
-    fun toggleDesktopMode(enabled: Boolean) {
-        PreferenceManager.isDesktopMode = enabled
-        binding.mainWebview.settings.userAgentString = if (enabled) DESKTOP_UA else MOBILE_UA
-        hardReload()
+    fun toggleDesktop(on: Boolean) {
+        Prefs.desktop = on
+        bind.webview.settings.userAgentString = if (on) UA_D else UA_M
+        reload()
     }
     
     override fun onResume() {
         super.onResume()
-        binding.mainWebview.onResume()
-        injectScripts()
+        bind.webview.onResume()
+        bind.webview.evaluateJavascript(AdBlock.CSS, null)
+        injectBgPlay()
+        JSBridge.inject(bind.webview)
     }
     
     override fun onPause() {
         super.onPause()
-        // Don't pause WebView for background play
-        binding.mainWebview.evaluateJavascript(
-            "(function(){var v=document.querySelector('video');if(v&&!v.ended)v.play();})();",
-            null
-        )
+        // Keep video playing for bg play
+        if (Prefs.bgPlay) {
+            bind.webview.evaluateJavascript("(function(){var v=document.querySelector('video');if(v)v.play()})();", null)
+        }
     }
     
     override fun onDestroy() {
-        networkCallback?.let {
+        netCallback?.let {
             val cm = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
             cm.unregisterNetworkCallback(it)
         }
+        AudioService.stop(this)
         super.onDestroy()
     }
     
-    override fun onNewIntent(intent: Intent?) {
-        super.onNewIntent(intent)
-        intent?.data?.let { binding.mainWebview.loadUrl(it.toString()) }
+    override fun onNewIntent(i: Intent?) {
+        super.onNewIntent(i)
+        i?.data?.let { bind.webview.loadUrl(it.toString()) }
     }
 }

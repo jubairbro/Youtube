@@ -2,79 +2,69 @@
 <androidx.coordinatorlayout.widget.CoordinatorLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
-    android:id="@+id/root_layout"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#000000"
     android:fitsSystemWindows="true">
 
     <FrameLayout
-        android:id="@+id/main_container"
         android:layout_width="match_parent"
         android:layout_height="match_parent">
 
         <WebView
-            android:id="@+id/main_webview"
+            android:id="@+id/webview"
             android:layout_width="match_parent"
             android:layout_height="match_parent"/>
 
         <ProgressBar
-            android:id="@+id/progress_bar"
+            android:id="@+id/progress"
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:layout_gravity="center"
             android:indeterminateTint="#FF0000"
             android:visibility="gone"/>
 
-        <RelativeLayout
-            android:id="@+id/offline_layout"
+        <LinearLayout
+            android:id="@+id/offline"
             android:layout_width="match_parent"
             android:layout_height="match_parent"
-            android:background="#000000"
-            android:visibility="gone"
-            android:gravity="center">
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
 
             <ImageView
-                android:id="@+id/img_no_net"
                 android:layout_width="80dp"
                 android:layout_height="80dp"
-                android:src="@drawable/ic_wifi_off"
-                android:layout_centerHorizontal="true"
-                android:layout_marginBottom="20dp"/>
+                android:src="@drawable/ic_wifi_off"/>
 
             <TextView
-                android:id="@+id/txt_offline"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="No Internet Connection"
-                android:textColor="#AAAAAA"
-                android:textSize="18sp"
-                android:layout_below="@id/img_no_net"
-                android:layout_centerHorizontal="true"/>
+                android:layout_marginTop="16dp"
+                android:text="No Internet"
+                android:textColor="#FFFFFF"
+                android:textSize="18sp"/>
 
             <Button
-                android:id="@+id/btn_retry"
+                android:id="@+id/retry"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="30dp"
-                android:text="RETRY"
-                android:backgroundTint="#FF0000"
-                android:textColor="#FFFFFF"
-                android:layout_below="@id/txt_offline"
-                android:layout_centerHorizontal="true"/>
+                android:layout_marginTop="24dp"
+                android:text="Retry"
+                android:backgroundTint="#FF0000"/>
 
-        </RelativeLayout>
+        </LinearLayout>
 
     </FrameLayout>
 
     <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fab_pip"
+        android:id="@+id/fab"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_gravity="bottom|end"
         android:layout_margin="16dp"
         android:src="@drawable/ic_pip"
-        android:contentDescription="PiP Mode"
+        android:contentDescription="PiP"
         app:backgroundTint="#FF0000"
         app:tint="#FFFFFF"/>
 

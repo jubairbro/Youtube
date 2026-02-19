@@ -11,8 +11,8 @@ android {
         applicationId = "com.sensei.youtube"
         minSdk = 24
         targetSdk = 34
-        versionCode = 2
-        versionName = "1.1.0"
+        versionCode = 3
+        versionName = "2.0.0"
     }
 
     signingConfigs {
@@ -72,4 +72,15 @@ dependencies {
     implementation("androidx.webkit:webkit:1.8.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.viewpager2:viewpager2:1.0.0")
+    
+    // ExoPlayer for background audio
+    implementation("androidx.media3:media3-exoplayer:1.2.1")
+    implementation("androidx.media3:media3-common:1.2.1")
+    implementation("androidx.media3:media3-datasource-okhttp:1.2.1")
+    
+    // OkHttp for network
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    
+    // Coroutines
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
 }
