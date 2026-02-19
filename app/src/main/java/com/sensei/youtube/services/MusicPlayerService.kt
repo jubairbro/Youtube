@@ -1,236 +1,79 @@
-package com.sensei.youtube.services
+plugins {
+    id("com.android.application")
+    id("org.jetbrains.kotlin.android")
+}
 
-import android.app.Notification
-import android.app.NotificationManager
-import android.app.PendingIntent
-import android.app.Service
-import android.content.Context
-import android.content.Intent
-import android.content.pm.ServiceInfo
-import android.net.Uri
-import android.os.Binder
-import android.os.Build
-import android.os.IBinder
-import android.os.PowerManager
-import android.util.Log
-import androidx.core.app.NotificationCompat
-import androidx.media3.common.MediaItem
-import androidx.media3.common.Player
-import androidx.media3.exoplayer.ExoPlayer
-import androidx.media3.session.MediaSession
-import androidx.media3.ui.PlayerNotificationManager
-import com.sensei.youtube.R
-import com.sensei.youtube.ui.MainActivity
+android {
+    namespace = "com.sensei.youtube"
+    compileSdk = 34
 
-class MusicPlayerService : Service() {
-    
-    private var player: ExoPlayer? = null
-    private var mediaSession: MediaSession? = null
-    private var playerNotificationManager: PlayerNotificationManager? = null
-    private var wakeLock: PowerManager.WakeLock? = null
-    
-    companion object {
-        private const val TAG = "MusicPlayerService"
-        const val CHANNEL_ID = "youtube_lite_playback"
-        const val NOTIFICATION_ID = 1001
-        
-        const val ACTION_PLAY = "com.sensei.youtube.ACTION_PLAY"
-        const val ACTION_PAUSE = "com.sensei.youtube.ACTION_PAUSE"
-        const val ACTION_STOP = "com.sensei.youtube.ACTION_STOP"
-        const val ACTION_SET_URL = "com.sensei.youtube.ACTION_SET_URL"
-        const val EXTRA_VIDEO_URL = "video_url"
-        const val EXTRA_VIDEO_TITLE = "video_title"
-        const val EXTRA_VIDEO_AUTHOR = "video_author"
-        
-        var currentVideoTitle: String? = null
-        var currentVideoAuthor: String? = null
-        var currentVideoUrl: String? = null
-        
-        private var instance: MusicPlayerService? = null
-        
-        fun isPlaying(): Boolean = instance?.player?.isPlaying ?: false
-        
-        fun play(context: Context) {
-            instance?.player?.play()
-        }
-        
-        fun pause(context: Context) {
-            instance?.player?.pause()
-        }
-        
-        fun setVideo(context: Context, url: String, title: String? = null, author: String? = null) {
-            currentVideoUrl = url
-            currentVideoTitle = title
-            currentVideoAuthor = author
-            
-            val intent = Intent(context, MusicPlayerService::class.java).apply {
-                action = ACTION_SET_URL
-                putExtra(EXTRA_VIDEO_URL, url)
-                putExtra(EXTRA_VIDEO_TITLE, title)
-                putExtra(EXTRA_VIDEO_AUTHOR, author)
-            }
-            
-            try {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                    context.startForegroundService(intent)
-                } else {
-                    context.startService(intent)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Failed to start service", e)
-            }
+    defaultConfig {
+        applicationId = "com.sensei.youtube"
+        minSdk = 24
+        targetSdk = 34
+        versionCode = 1
+        versionName = "1.0.0"
+    }
+
+    signingConfigs {
+        create("release") {
+            storeFile = rootProject.file("my-release-key.jks")
+            storePassword = "123456"
+            keyAlias = "my-key-alias"
+            keyPassword = "123456"
         }
     }
-    
-    private val binder = LocalBinder()
-    
-    inner class LocalBinder : Binder() {
-        fun getService(): MusicPlayerService = this@MusicPlayerService
-    }
-    
-    override fun onBind(intent: Intent?): IBinder = binder
-    
-    override fun onCreate() {
-        super.onCreate()
-        instance = this
-        
-        val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
-        wakeLock = powerManager.newWakeLock(
-            PowerManager.PARTIAL_WAKE_LOCK,
-            "YouTubeLite::MusicPlayback"
-        )
-        
-        initializePlayer()
-    }
-    
-    private fun initializePlayer() {
-        player = ExoPlayer.Builder(this).build().apply {
-            playWhenReady = true
+
+    buildTypes {
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            signingConfig = signingConfigs.getByName("release")
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
-        
-        mediaSession = MediaSession.Builder(this, player!!).build()
-        
-        setupNotificationManager()
-    }
-    
-    private fun setupNotificationManager() {
-        val descriptionAdapter = object : PlayerNotificationManager.MediaDescriptionAdapter {
-            override fun getCurrentContentTitle(player: Player): CharSequence {
-                return currentVideoTitle ?: "YouTube Lite"
-            }
-            
-            override fun createCurrentContentIntent(player: Player): PendingIntent? {
-                val intent = Intent(this@MusicPlayerService, MainActivity::class.java)
-                return PendingIntent.getActivity(
-                    this@MusicPlayerService,
-                    0,
-                    intent,
-                    PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-                )
-            }
-            
-            override fun getCurrentContentText(player: Player): CharSequence? {
-                return currentVideoAuthor ?: "Playing"
-            }
-            
-            override fun getCurrentLargeIcon(
-                player: Player,
-                callback: PlayerNotificationManager.BitmapCallback
-            ): android.graphics.Bitmap? = null
-        }
-        
-        val notificationListener = object : PlayerNotificationManager.NotificationListener {
-            override fun onNotificationPosted(
-                notificationId: Int,
-                notification: Notification,
-                ongoing: Boolean
-            ) {
-                if (ongoing) {
-                    try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                            startForeground(
-                                notificationId,
-                                notification,
-                                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-                            )
-                        } else {
-                            startForeground(notificationId, notification)
-                        }
-                    } catch (e: Exception) {
-                        Log.e(TAG, "Failed to start foreground", e)
-                    }
-                }
-            }
-            
-            override fun onNotificationCancelled(notificationId: Int, dismissedByUser: Boolean) {
-                stopSelf()
-            }
-        }
-        
-        playerNotificationManager = PlayerNotificationManager.Builder(
-            this,
-            NOTIFICATION_ID,
-            CHANNEL_ID
-        )
-            .setMediaDescriptionAdapter(descriptionAdapter)
-            .setNotificationListener(notificationListener)
-            .build()
-            .also {
-                it.setPlayer(player)
-                it.setMediaSessionToken(mediaSession!!.sessionCompatToken)
-                it.setSmallIcon(R.drawable.ic_notification)
-            }
-    }
-    
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        when (intent?.action) {
-            ACTION_PLAY -> player?.play()
-            ACTION_PAUSE -> player?.pause()
-            ACTION_STOP -> {
-                player?.stop()
-                stopForeground(STOP_FOREGROUND_REMOVE)
-                stopSelf()
-            }
-            ACTION_SET_URL -> {
-                val url = intent.getStringExtra(EXTRA_VIDEO_URL)
-                val title = intent.getStringExtra(EXTRA_VIDEO_TITLE)
-                val author = intent.getStringExtra(EXTRA_VIDEO_AUTHOR)
-                
-                currentVideoTitle = title
-                currentVideoAuthor = author
-                
-                if (!url.isNullOrEmpty()) {
-                    playVideo(url)
-                }
-                
-                wakeLock?.acquire(30 * 60 * 1000L)
-            }
-        }
-        
-        return START_STICKY
-    }
-    
-    private fun playVideo(url: String) {
-        try {
-            val mediaItem = MediaItem.fromUri(Uri.parse(url))
-            player?.setMediaItem(mediaItem)
-            player?.prepare()
-            player?.playWhenReady = true
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to play video", e)
+        debug {
+            signingConfig = signingConfigs.getByName("release")
         }
     }
-    
-    override fun onDestroy() {
-        playerNotificationManager?.setPlayer(null)
-        player?.release()
-        mediaSession?.release()
-        
-        wakeLock?.let {
-            if (it.isHeld) it.release()
-        }
-        
-        instance = null
-        super.onDestroy()
+
+    buildFeatures {
+        viewBinding = true
     }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    lint {
+        checkReleaseBuilds = false
+        abortOnError = false
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+        }
+    }
+}
+
+dependencies {
+    implementation("androidx.core:core-ktx:1.12.0")
+    implementation("androidx.appcompat:appcompat:1.6.1")
+    implementation("com.google.android.material:material:1.11.0")
+    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
+    implementation("androidx.webkit:webkit:1.8.0")
+    implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
+    implementation("androidx.viewpager2:viewpager2:1.0.0")
+    implementation("androidx.media:media:1.7.0")
+    
+    implementation("androidx.media3:media3-exoplayer:1.2.1")
+    implementation("androidx.media3:media3-common:1.2.1")
 }

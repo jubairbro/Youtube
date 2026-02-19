@@ -72,9 +72,8 @@ dependencies {
     implementation("androidx.webkit:webkit:1.8.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.7.0")
     implementation("androidx.viewpager2:viewpager2:1.0.0")
+    implementation("androidx.media:media:1.7.0")
     
     implementation("androidx.media3:media3-exoplayer:1.2.1")
-    implementation("androidx.media3:media3-ui:1.2.1")
-    implementation("androidx.media3:media3-session:1.2.1")
     implementation("androidx.media3:media3-common:1.2.1")
 }
