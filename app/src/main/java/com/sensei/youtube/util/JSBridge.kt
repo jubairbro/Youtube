@@ -19,68 +19,125 @@ class JSBridge(private val ctx: Context) {
                 (function(){
                     if(window._yti)return;
                     window._yti=1;
-                    console.log('[YTLite] Bridge injected');
+                    console.log('[YTLite] Bridge v2');
                     
                     var videoId=null;
                     var title='';
                     var channel='';
+                    var streamUrl=null;
+                    var isAudioOnly=false;
                     
+                    // Get video ID from URL
                     function getId(){
                         var m=location.href.match(/[?&]v=([^&]+)/);
                         if(m)return m[1];
-                        m=location.href.match(/\/(watch|live|shorts)\/([^?&]+)/);
+                        m=location.href.match(/\/(watch|live|shorts)\/([^?&#]+)/);
                         return m?m[2]:null;
                     }
                     
+                    // Get video title
                     function getTitle(){
-                        var el=document.querySelector('h1.ytd-video-primary-info-renderer')||
-                                document.querySelector('h1.title')||
-                                document.querySelector('#title h1')||
-                                document.querySelector('ytd-watch-metadata h1');
-                        return el?el.textContent.trim():document.title.replace(' - YouTube','').trim();
+                        var selectors=[
+                            'h1.ytd-video-primary-info-renderer',
+                            'h1.title',
+                            '#title h1',
+                            'ytd-watch-metadata h1',
+                            'yt-formatted-string.ytd-watch-metadata'
+                        ];
+                        for(var i=0;i<selectors.length;i++){
+                            var el=document.querySelector(selectors[i]);
+                            if(el && el.textContent)return el.textContent.trim();
+                        }
+                        return document.title.replace(' - YouTube','').trim();
                     }
                     
+                    // Get channel name
                     function getChannel(){
-                        var el=document.querySelector('ytd-channel-name a')||
-                                document.querySelector('#channel-name a')||
-                                document.querySelector('a.yt-simple-endpoint.ytd-channel-name');
-                        return el?el.textContent.trim():'';
+                        var selectors=[
+                            'ytd-channel-name a',
+                            '#channel-name a',
+                            'a.yt-simple-endpoint.ytd-channel-name',
+                            'ytd-video-owner-renderer a'
+                        ];
+                        for(var i=0;i<selectors.length;i++){
+                            var el=document.querySelector(selectors[i]);
+                            if(el && el.textContent)return el.textContent.trim();
+                        }
+                        return '';
                     }
                     
+                    // Get video element
                     function getVideo(){
                         return document.querySelector('video.html5-main-video')||
                                document.querySelector('#movie_player video')||
                                document.querySelector('video');
                     }
                     
-                    // Find stream URL
-                    function findStreamUrl(){
+                    // Extract audio stream URL from YouTube player
+                    function extractAudioUrl(){
                         var video=getVideo();
-                        if(video && video.src && video.src.startsWith('http')){
+                        if(!video)return null;
+                        
+                        // Method 1: Direct video src
+                        if(video.src && video.src.startsWith('http')){
                             return video.src;
                         }
                         
-                        // Check blob URLs
-                        if(video && video.src && video.src.startsWith('blob:')){
-                            // Try to find in page scripts
-                            var scripts=document.querySelectorAll('script');
-                            for(var i=0;i<scripts.length;i++){
-                                var txt=scripts[i].textContent;
-                                var m=txt.match(/"url":"([^"]+googlevideo[^"]+)"/);
-                                if(m){
-                                    return m[1].replace(/\\u0026/g,'&').replace(/\\/g,'');
-                                }
-                            }
+                        // Method 2: currentSrc
+                        if(video.currentSrc && video.currentSrc.startsWith('http')){
+                            return video.currentSrc;
                         }
                         
-                        // Check video element currentSrc
-                        if(video && video.currentSrc){
-                            return video.currentSrc;
+                        // Method 3: Extract from YouTube player config
+                        try{
+                            var player=document.querySelector('#movie_player')||document.querySelector('.html5-video-player');
+                            if(player && player.getPlayerResponse){
+                                var resp=player.getPlayerResponse();
+                                if(resp && resp.streamingData){
+                                    // Try adaptive formats (audio only)
+                                    var adaptive=resp.streamingData.adaptiveFormats;
+                                    if(adaptive){
+                                        for(var i=0;i<adaptive.length;i++){
+                                            var fmt=adaptive[i];
+                                            if(fmt.mimeType && fmt.mimeType.startsWith('audio/')){
+                                                return fmt.url;
+                                            }
+                                        }
+                                    }
+                                    // Fallback to regular formats
+                                    var formats=resp.streamingData.formats;
+                                    if(formats && formats[0]){
+                                        return formats[0].url;
+                                    }
+                                }
+                            }
+                        }catch(e){console.log('Player extract error:',e)}
+                        
+                        // Method 4: Search in page scripts for googlevideo URL
+                        var scripts=document.querySelectorAll('script');
+                        for(var i=0;i<scripts.length;i++){
+                            var txt=scripts[i].textContent||scripts[i].innerHTML;
+                            
+                            // Look for url encoded in JSON
+                            var matches=txt.match(/"url"\s*:\s*"(https?:[^"]+googlevideo[^"]+)"/g);
+                            if(matches){
+                                for(var j=0;j<matches.length;j++){
+                                    var url=matches[j].replace(/^"url"\s*:\s*"/,'').replace(/"$/,'');
+                                    url=url.replace(/\\u0026/g,'&').replace(/\\\\/g,'').replace(/\\//g,'/');
+                                    if(url.includes('audio')){
+                                        return url;
+                                    }
+                                }
+                                // Return first found if no audio specific
+                                var url=matches[0].replace(/^"url"\s*:\s*"/,'').replace(/"$/,'');
+                                return url.replace(/\\u0026/g,'&').replace(/\\\\/g,'').replace(/\\//g,'/');
+                            }
                         }
                         
                         return null;
                     }
                     
+                    // Notify Android of state changes
                     function notifyState(){
                         var v=getVideo();
                         if(!v)return;
@@ -90,39 +147,57 @@ class JSBridge(private val ctx: Context) {
                             videoId=id;
                             title=getTitle();
                             channel=getChannel();
+                            streamUrl=extractAudioUrl();
+                            
                             if(window.Android){
                                 Android.onVideo(id,title,channel);
                             }
                         }
                         
                         if(window.Android){
-                            if(!v.paused){
-                                Android.onPlay();
-                            }else{
-                                Android.onPause();
-                            }
+                            var time=v.currentTime||0;
+                            var dur=v.duration||0;
+                            Android.onState(!v.paused,time,dur);
                         }
                     }
                     
-                    // Watch video state
+                    // Setup video listeners
                     function setupVideo(){
                         var v=getVideo();
                         if(!v)return false;
                         
+                        // Remove old listeners
+                        var newV=v.cloneNode(true);
+                        v.parentNode.replaceChild(newV,v);
+                        v=newV;
+                        
                         v.addEventListener('play',function(){
-                            var url=findStreamUrl();
-                            if(url && window.Android){
-                                Android.onStream(url,getTitle(),getChannel());
+                            title=getTitle();
+                            channel=getChannel();
+                            streamUrl=extractAudioUrl();
+                            
+                            if(window.Android){
+                                Android.onPlay(title,channel);
                             }
-                            notifyState();
+                            
+                            // Try to get audio URL for ExoPlayer
+                            if(streamUrl && window.Android){
+                                Android.onAudioUrl(streamUrl,title,channel);
+                            }
                         });
                         
                         v.addEventListener('pause',function(){
-                            notifyState();
+                            if(window.Android)Android.onPause();
                         });
                         
                         v.addEventListener('ended',function(){
-                            if(window.Android)Android.onEnd();
+                            if(window.Android)Android.onEnded();
+                        });
+                        
+                        v.addEventListener('timeupdate',function(){
+                            if(window.Android){
+                                Android.onTime(v.currentTime||0,v.duration||0);
+                            }
                         });
                         
                         notifyState();
@@ -131,7 +206,7 @@ class JSBridge(private val ctx: Context) {
                     
                     function trySetup(){
                         if(!setupVideo()){
-                            setTimeout(trySetup,500);
+                            setTimeout(trySetup,300);
                         }
                     }
                     
@@ -143,40 +218,37 @@ class JSBridge(private val ctx: Context) {
                         if(location.href!==lastUrl){
                             lastUrl=location.href;
                             videoId=null;
-                            setTimeout(trySetup,1000);
+                            streamUrl=null;
+                            setTimeout(trySetup,500);
                         }
                         notifyState();
-                    },1000);
+                    },500);
                     
                     // Mutation observer
                     new MutationObserver(function(){
-                        setupVideo();
+                        if(!getVideo())trySetup();
                     }).observe(document.body,{childList:true,subtree:true});
                     
-                    console.log('[YTLite] Bridge ready');
+                    console.log('[YTLite] Bridge ready v2');
                 })();
             """.trimIndent()
             
-            wv.evaluateJavascript(js) { Log.d(TAG, "Bridge: $it") }
+            wv.evaluateJavascript(js) { Log.d(TAG, "Bridge injected: $it") }
         }
     }
     
     @JavascriptInterface
-    fun onVideo(id: String, t: String, c: String) {
-        Log.d(TAG, "Video: $id - $t")
-        AudioService.title = t
-        AudioService.author = c
+    fun onVideo(id: String, title: String, channel: String) {
+        Log.d(TAG, "Video: $id")
+        AudioService.title = title
+        AudioService.author = channel
     }
     
     @JavascriptInterface
-    fun onStream(url: String, t: String, c: String) {
-        Log.d(TAG, "Stream: ${url.take(50)}...")
-        AudioService.play(ctx, url, t, c)
-    }
-    
-    @JavascriptInterface
-    fun onPlay() {
-        Log.d(TAG, "Playing")
+    fun onPlay(title: String, channel: String) {
+        Log.d(TAG, "Playing: $title")
+        AudioService.title = title
+        AudioService.author = channel
     }
     
     @JavascriptInterface
@@ -185,8 +257,25 @@ class JSBridge(private val ctx: Context) {
     }
     
     @JavascriptInterface
-    fun onEnd() {
+    fun onEnded() {
         Log.d(TAG, "Ended")
+    }
+    
+    @JavascriptInterface
+    fun onState(playing: Boolean, time: Double, duration: Double) {
+        // State update
+    }
+    
+    @JavascriptInterface
+    fun onTime(current: Double, duration: Double) {
+        // Time update
+    }
+    
+    @JavascriptInterface
+    fun onAudioUrl(url: String, title: String, channel: String) {
+        Log.d(TAG, "Audio URL found: ${url.take(60)}...")
+        // This URL can be passed to ExoPlayer for native audio playback
+        AudioService.play(ctx, url, title, channel)
     }
     
     @JavascriptInterface

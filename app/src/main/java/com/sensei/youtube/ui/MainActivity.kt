@@ -2,7 +2,6 @@ package com.sensei.youtube.ui
 
 import android.annotation.SuppressLint
 import android.app.PictureInPictureParams
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
@@ -40,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private var customView: FrameLayout? = null
     private var customCallback: WebChromeClient.CustomViewCallback? = null
     private var isFs = false
+    private var isAudioMode = false
     
     companion object {
         private const val TAG = "Main"
@@ -61,7 +61,8 @@ class MainActivity : AppCompatActivity() {
         setupWv()
         setupNet()
         setupBack()
-        setupFab()
+        setupFabs()
+        setupAudioPanel()
         showTg()
     }
     
@@ -101,7 +102,6 @@ class MainActivity : AppCompatActivity() {
             override fun shouldInterceptRequest(v: WebView?, r: WebResourceRequest?): WebResourceResponse? {
                 val url = r?.url.toString()
                 
-                // Allow images always
                 if (url.contains(".jpg") || url.contains(".png") || 
                     url.contains(".webp") || url.contains(".gif")) {
                     return super.shouldInterceptRequest(v, r)
@@ -122,7 +122,6 @@ class MainActivity : AppCompatActivity() {
                 super.onPageFinished(v, url)
                 bind.progress.visibility = View.GONE
                 
-                // Inject scripts
                 if (Prefs.adBlock) {
                     wv.evaluateJavascript(AdBlock.CSS, null)
                 }
@@ -277,8 +276,90 @@ class MainActivity : AppCompatActivity() {
         })
     }
     
-    private fun setupFab() {
+    private fun setupFabs() {
+        // PiP button
         bind.fab.setOnClickListener { enterPip() }
+        
+        // Audio mode button
+        bind.fabAudio.setOnClickListener { toggleAudioMode() }
+    }
+    
+    private fun setupAudioPanel() {
+        bind.btnAudioPause.setOnClickListener {
+            if (AudioService.isPlaying()) {
+                AudioService.pause()
+                bind.btnAudioPause.setImageResource(R.drawable.ic_play)
+            } else {
+                AudioService.play()
+                bind.btnAudioPause.setImageResource(R.drawable.ic_pause)
+            }
+        }
+        
+        bind.btnAudioClose.setOnClickListener {
+            hideAudioPanel()
+            AudioService.stop(this)
+        }
+    }
+    
+    private fun toggleAudioMode() {
+        isAudioMode = !isAudioMode
+        
+        if (isAudioMode) {
+            // Extract and play audio
+            Toast.makeText(this, "🎵 Audio Mode Activated", Toast.LENGTH_SHORT).show()
+            
+            // Get current video info and play
+            bind.webview.evaluateJavascript("""
+                (function(){
+                    var v=document.querySelector('video');
+                    if(v){
+                        v.play();
+                        window.Android && Android.onAudioMode(true);
+                    }
+                })();
+            """.trimIndent(), null)
+            
+            showAudioPanel()
+        } else {
+            hideAudioPanel()
+        }
+    }
+    
+    private fun showAudioPanel() {
+        bind.audioPanel.visibility = View.VISIBLE
+        bind.audioTitle.text = AudioService.title
+        bind.audioChannel.text = AudioService.author
+        bind.btnAudioPause.setImageResource(
+            if (AudioService.isPlaying()) R.drawable.ic_pause else R.drawable.ic_play
+        )
+        
+        // Hide video if in audio mode
+        bind.webview.evaluateJavascript("""
+            (function(){
+                var v=document.querySelector('video');
+                if(v)v.style.opacity='0';
+            })();
+        """.trimIndent(), null)
+    }
+    
+    private fun hideAudioPanel() {
+        isAudioMode = false
+        bind.audioPanel.visibility = View.GONE
+        
+        // Show video again
+        bind.webview.evaluateJavascript("""
+            (function(){
+                var v=document.querySelector('video');
+                if(v)v.style.opacity='1';
+            })();
+        """.trimIndent(), null)
+    }
+    
+    fun updateAudioPanel(title: String, channel: String) {
+        runOnUiThread {
+            bind.audioTitle.text = title
+            bind.audioChannel.text = channel
+        }
     }
     
     private fun enterPip(): Boolean {
@@ -310,6 +391,7 @@ class MainActivity : AppCompatActivity() {
     override fun onPictureInPictureModeChanged(inPip: Boolean, c: Configuration) {
         super.onPictureInPictureModeChanged(inPip, c)
         bind.fab.isVisible = !inPip
+        bind.fabAudio.isVisible = !inPip
         if (inPip) {
             bind.webview.evaluateJavascript("(function(){var v=document.querySelector('video');if(v)v.play()})();", null)
         }
@@ -371,9 +453,13 @@ class MainActivity : AppCompatActivity() {
     
     override fun onPause() {
         super.onPause()
-        // Keep video playing for bg play
         if (Prefs.bgPlay) {
-            bind.webview.evaluateJavascript("(function(){var v=document.querySelector('video');if(v)v.play()})();", null)
+            bind.webview.evaluateJavascript("(function(){var v=document.querySelector('video');if(v&&!v.ended)v.play()})();", null)
+            
+            val intent = Intent(this, AudioService::class.java).apply {
+                action = AudioService.ACTION_UPDATE
+            }
+            try { startService(intent) } catch (e: Exception) {}
         }
     }
     
