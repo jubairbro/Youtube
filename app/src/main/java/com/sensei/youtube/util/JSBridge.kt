@@ -193,26 +193,11 @@ class JSBridge(private val ctx: Context) {
     
     @JavascriptInterface
     fun onStreamUrl(url: String, title: String, channel: String) {
-        Log.d(TAG, "Stream URL: ${url.take(80)}...")
-        
-        // Decode URL if needed
-        var decodedUrl = url
-        try {
-            decodedUrl = java.net.URLDecoder.decode(url, "UTF-8")
-        } catch (e: Exception) {
-            Log.e(TAG, "URL decode failed", e)
-        }
+        Log.d(TAG, "Stream URL detected: ${url.take(80)}...")
         
         AudioService.title = title
         AudioService.author = channel
-        
-        // Play with ExoPlayer
-        AudioService.play(ctx, decodedUrl, title, channel)
-        
-        // Show toast
-        Handler(Looper.getMainLooper()).post {
-            android.widget.Toast.makeText(ctx, "🎵 $title", android.widget.Toast.LENGTH_SHORT).show()
-        }
+        AudioService.setPlaying(ctx, true, title, channel)
     }
     
     @JavascriptInterface
