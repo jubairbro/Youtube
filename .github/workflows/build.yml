@@ -10,6 +10,8 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     
     steps:
     - name: Checkout code
@@ -20,25 +22,72 @@ jobs:
       with:
         java-version: '17'
         distribution: 'temurin'
-        cache: gradle
+        
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@v3
+      with:
+        gradle-version: 8.2
+        cache-read-only: ${{ github.ref != 'refs/heads/main' }}
         
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
       
+    - name: Download Gradle Wrapper (if missing)
+      run: |
+        if [ ! -f "gradle/wrapper/gradle-wrapper.jar" ]; then
+          mkdir -p gradle/wrapper
+          curl -L -o gradle/wrapper/gradle-wrapper.jar https://github.com/gradle/gradle/raw/v8.2.0/gradle/wrapper/gradle-wrapper.jar
+        fi
+      
     - name: Build Debug APK
-      run: ./gradlew assembleDebug
+      run: ./gradlew assembleDebug --stacktrace --no-daemon
       
     - name: Build Release APK
-      run: ./gradlew assembleRelease
+      run: ./gradlew assembleRelease --stacktrace --no-daemon
       
+    - name: Rename APKs
+      run: |
+        mv app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/debug/YouTube-Lite-Debug.apk || true
+        mv app/build/outputs/apk/release/app-release.apk app/build/outputs/apk/release/YouTube-Lite-Release.apk || true
+        
     - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
+        name: YouTube-Lite-Debug
+        path: app/build/outputs/apk/debug/*.apk
         
     - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
-        name: app-release
-        path: app/build/outputs/apk/release/app-release.apk
+        name: YouTube-Lite-Release
+        path: app/build/outputs/apk/release/*.apk
+        
+    - name: Create Release
+      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v1.0.${{ github.run_number }}
+        name: YouTube Lite v1.0.${{ github.run_number }}
+        files: |
+          app/build/outputs/apk/debug/*.apk
+          app/build/outputs/apk/release/*.apk
+        body: |
+          ## YouTube Lite Release Build
+          
+          **Commit:** ${{ github.sha }}
+          **Branch:** ${{ github.ref_name }}
+          
+          ### Downloads
+          | APK | Description |
+          |-----|-------------|
+          | `YouTube-Lite-Debug.apk` | Debug build with logging |
+          | `YouTube-Lite-Release.apk` | Optimized release build |
+          
+          ### Features
+          - Background Playback
+          - Ad Blocking
+          - Picture-in-Picture
+          - Google Login Support
+          - Material Design UI
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

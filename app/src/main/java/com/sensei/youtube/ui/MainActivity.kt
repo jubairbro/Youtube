@@ -6,7 +6,6 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.content.res.Configuration
-import android.graphics.Rect
 import android.net.ConnectivityManager
 import android.net.Network
 import android.net.NetworkCapabilities
@@ -29,12 +28,9 @@ import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.isVisible
-import androidx.lifecycle.lifecycleScope
 import com.google.android.material.dialog.MaterialAlertDialogBuilder
-import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.sensei.youtube.R
 import com.sensei.youtube.databinding.ActivityMainBinding
 import com.sensei.youtube.databinding.DialogTelegramBinding
@@ -42,12 +38,10 @@ import com.sensei.youtube.services.NotificationService
 import com.sensei.youtube.utils.AdBlocker
 import com.sensei.youtube.utils.PreferenceManager
 import com.sensei.youtube.utils.WebAppInterface
-import kotlinx.coroutines.launch
 
 class MainActivity : AppCompatActivity() {
     
     private lateinit var binding: ActivityMainBinding
-    private var isVideoPlaying = false
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
     private var telegramDialogShown = false
     
@@ -56,9 +50,7 @@ class MainActivity : AppCompatActivity() {
     
     private val pipPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
-    ) { _ ->
-        // Handle result if needed
-    }
+    ) { }
     
     companion object {
         private const val TAG = "MainActivity"
@@ -403,10 +395,6 @@ class MainActivity : AppCompatActivity() {
                 pipPermissionLauncher.launch(intent)
             }
         }
-    }
-    
-    fun openSettings() {
-        startActivity(Intent(this, SettingsActivity::class.java))
     }
     
     fun hardReload() {
